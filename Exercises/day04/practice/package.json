@@ -1,0 +1,20 @@
+{
+  "name": "day04-exercises",
+  "version": "1.0.0",
+  "description": "Learning layered architecture for Day 4 exercises",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": ["learning", "typescript"],
+  "author": "Tedy Suwega",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.0",
+    "@types/node": "^20.0.0"
+  }
+}

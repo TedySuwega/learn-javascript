@@ -1,0 +1,16 @@
+{
+  "name": "day03-exercises",
+  "version": "1.0.0",
+  "description": "Learning project structure for day 3 exercises",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": ["learning", "typescript"],
+  "author": "Tedy Suwega",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

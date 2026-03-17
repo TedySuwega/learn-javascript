@@ -1,0 +1,16 @@
+{
+  "name": "day03-practice",
+  "version": "1.0.0",
+  "description": "Learning project structure",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": ["learning", "typescript"],
+  "author": "Tedy Suwega",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}
