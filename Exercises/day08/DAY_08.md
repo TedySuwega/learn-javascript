@@ -479,10 +479,29 @@ getMigrationStatus();
 ### Exercise 1: Write SQL Queries
 Write SQL queries for:
 1. Get all users who registered after January 1, 2024
+- SELECT * FROM Users WHERE created_at > '2024-01-01';
+
+**✅ Correct!** Proper use of WHERE with date comparison.
+
 2. Get the 5 most recent posts
+- SELECT * FROM posts ORDER BY created_at DESC LIMIT 5;
+
+**✅ Correct!** Proper use of ORDER BY DESC for most recent, LIMIT 5, and correct table name.
+
 3. Count how many comments each post has
+- SELECT posts.title, COUNT(comments.id) as comment_count FROM posts LEFT JOIN comments ON posts.id = comments.post_id GROUP BY posts.id;
+
+**✅ Correct!** Good use of LEFT JOIN (includes posts with 0 comments), COUNT, and GROUP BY.
+
 4. Update a user's email where id = 5
+- UPDATE users SET email = 'alice.smith@example.com' WHERE id = 5;
+
+**✅ Correct!** Proper UPDATE with SET and WHERE clause targeting the right id.
+
 5. Delete all inactive users
+- DELETE FROM users WHERE is_active = false;
+
+**✅ Correct!** Proper DELETE with WHERE clause.
 
 ### Exercise 2: Create Migration Files
 Write migration files (up and down) for:
@@ -503,19 +522,40 @@ Add these methods to the QueryBuilder:
 Write a SQL query to get all users where age > 18.
 
 **Your Answer**: 
+SELECT * FROM Users WHERE age >18;
 
+**✅ Correct!** Valid SQL with WHERE condition.
 
 ### Q2: Migration Purpose
 What is a database migration and why do we use it?
 
 **Your Answer**: 
+Migrations are like version control for your database structure. They let you:
+- Create tables
+- Modify existing tables
+- Roll back changes if something goes wrong
 
+why we use migration, 
+Without migrations:
+- You manually run SQL to create tables
+- Hard to track what changes were made
+- Team members might have different database structures
+
+With migrations:
+- Database changes are tracked in code
+- Everyone runs the same migrations
+- Can undo changes (rollback)
+
+**✅ Correct!** Thorough answer covering both what migrations are and why we use them with clear before/after comparison.
 
 ### Q3: Up and Down
 What does "up" and "down" mean in migrations?
 
 **Your Answer**: 
+up is for aplied the migration / make changes
+down for undo the migration / undo changes
 
+**✅ Correct!** Up applies changes (create table, add column), down reverts them (drop table, remove column).
 
 ---
 
@@ -524,30 +564,137 @@ What does "up" and "down" mean in migrations?
 ### B1: What is the danger of running UPDATE or DELETE without a WHERE clause?
 
 **Your Answer**: 
+Without where clause it will apllied to all row, that dangerous
 
+**✅ Correct!** Without WHERE, UPDATE affects every row and DELETE removes every row -- potentially catastrophic in production.
 
 ### B2: What does RETURNING * do in PostgreSQL?
 
 **Your Answer**: 
+It will return the content taht modified    
 
+**✅ Correct!** RETURNING * gives back the rows that were inserted, updated, or deleted so you can see/use them without a separate SELECT query.
+
+---
+
+## 📊 Quiz Results: Day 08
+
+| Question | Result | Notes |
+|----------|--------|-------|
+| Ex1-Q1 (users after Jan 2024) | ✅ Correct | Good WHERE with date |
+| Ex1-Q2 (5 most recent posts) | ✅ Correct | ORDER BY DESC + LIMIT 5 |
+| Ex1-Q3 (comments count) | ✅ Correct | LEFT JOIN + GROUP BY |
+| Ex1-Q4 (update email id=5) | ✅ Correct | UPDATE SET WHERE id=5 |
+| Ex1-Q5 (delete inactive) | ✅ Correct | |
+| Q1 (SQL age > 18) | ✅ Correct | |
+| Q2 (migration purpose) | ✅ Correct | Thorough explanation |
+| Q3 (up and down) | ✅ Correct | |
+| B1 (danger no WHERE) | ✅ Correct | |
+| B2 (RETURNING *) | ✅ Correct | |
+
+**Score: 10/10 (100%)**
+
+---
+
+### Exercise Review
+
+**Exercise 2 (Migration Files)** - `exercise/src/migrations/migrationRunner.ts`
+- ✅ Version 5: `create_products_table` - correctly pushes/filters `databaseTables`
+- ✅ Version 6: `add_description_to_products` - correctly uses comments for real SQL (ALTER TABLE)
+- ✅ Version 7: `create_orders_table` - correctly simulated with real SQL comment showing REFERENCES users(id)
+
+**Exercise 3 (Extend Query Builder)** - `exercise/src/database/queryBuilder.ts`
+- ✅ `orWhere()` - correctly stores the actual operator and uses `connector: "OR"`
+- ✅ `whereIn()` - correctly stores array value with `operator: "IN"`
+- ✅ `buildSelect()` updated to handle connectors (AND/OR) and expand IN arrays into multiple placeholders
+- Note: Initial attempt had issues (overwriting operator with "OR", not updating buildSelect). After guided hints and fixes, the final implementation is correct.
+
+**Test file** - `exercise/src/index.ts`
+- ✅ Demonstrates orWhere, whereIn, and combined queries with correct output
 
 ---
 
 ## ✅ Day 8 Checklist
 
-- [ ] Read Module 4 (Lines 1351-1621)
-- [ ] Understand SELECT with WHERE, ORDER BY, LIMIT
-- [ ] Understand INSERT with RETURNING
-- [ ] Understand UPDATE (and the danger without WHERE)
-- [ ] Understand DELETE (and the danger without WHERE)
-- [ ] Understand what migrations are
-- [ ] Understand up/down migration concept
-- [ ] Type all code examples
-- [ ] Complete Exercise 1 (SQL queries)
-- [ ] Complete Exercise 2 (Migration files)
-- [ ] Complete Exercise 3 (Query builder)
-- [ ] Answer all quiz questions
-- [ ] Update Progress.md
+- [x] Read Module 4 (Lines 1351-1621)
+- [x] Understand SELECT with WHERE, ORDER BY, LIMIT
+- [x] Understand INSERT with RETURNING
+- [x] Understand UPDATE (and the danger without WHERE)
+- [x] Understand DELETE (and the danger without WHERE)
+- [x] Understand what migrations are
+- [x] Understand up/down migration concept
+- [x] Type all code examples
+- [x] Complete Exercise 1 (SQL queries)
+- [x] Complete Exercise 2 (Migration files)
+- [x] Complete Exercise 3 (Query builder)
+- [x] Answer all quiz questions
+- [x] Update Progress.md
+
+---
+
+## 💬 Q&A Session Notes
+
+### Q: Exercise 2 is just text answers and Exercise 3 is actual code changes?
+
+**A:** Exercise 2 could go either way, but since the simulated migration system already exists in `migrationRunner.ts`, the practical approach is to add new migration objects (versions 5-7) directly to the file. Exercise 3 is definitely about modifying the actual `QueryBuilder` class in `queryBuilder.ts` to add new methods.
+
+---
+
+### Q: For the orders table migration with foreign key -- is it just the same pattern as creating products?
+
+**A:** Yes, since this is a simulated system (just tracking table names in an array), the code pattern is the same as version 5. Foreign keys only matter in a real database -- the simulation can't enforce referential integrity. Adding a comment with the real SQL (`REFERENCES users(id)`) shows understanding of the concept.
+
+---
+
+### Q: How do orWhere() and whereIn() work in the query builder?
+
+**A:** Key concepts:
+- `OR` is a **connector** between conditions, not a comparison operator. `orWhere("age", ">", 18)` should keep `>` as the operator and use `OR` to join it to the previous condition.
+- `whereIn` needs to expand an array into multiple placeholders: `field IN ($1, $2, $3)`, not `field IN $1`.
+- `buildSelect()` must use each condition's connector (AND/OR) instead of always joining with AND, and handle IN specially to expand array values.
+
+```typescript
+// orWhere stores the actual operator, marks connector as OR
+orWhere(field, operator, value) {
+    this.whereConditions.push({ field, operator, value, connector: "OR" });
+}
+
+// buildSelect uses connector for joining
+// First condition: "name = $1"
+// Next conditions: "AND age > $2" or "OR city = $3"
+```
+
+---
+
+### Q: Is queryBuilder.ts wrapping ORM capability? Does migrationRunner.ts use it?
+
+**A:** `queryBuilder.ts` is a simplified version of what an ORM/query builder does -- it generates SQL strings from chained method calls. `migrationRunner.ts` is completely independent; it does NOT use the query builder. They are two separate concepts:
+- **Migrations** = change database **structure** (create tables, add columns)
+- **Query builder** = read/write **data** within those tables
+- `index.ts` imports from both and runs them as the entry point.
+
+---
+
+### Q: In a real app, do we still need to create our own query builder?
+
+**A:** No. Real apps use libraries that provide this out of the box:
+- **Knex.js** (Query Builder) -- chain methods, it builds SQL
+- **Sequelize** (ORM) -- work with models/objects, handles SQL + migrations + relationships
+- **Prisma** (ORM) -- type-safe database access
+
+The exercise was for understanding what these libraries do under the hood. In this learning path, you'll use Sequelize which provides all of this.
+
+---
+
+### Q: What does real migration implementation look like?
+
+**A:** Very similar to the exercise. Key differences:
+- Each migration is a **separate file** (e.g., `001-create-users.js`, `002-create-posts.js`)
+- They execute **real SQL** against an actual database
+- Applied migrations are tracked in a **database table** (e.g., `SequelizeMeta`), not in-memory
+- Run via CLI: `npm run migrate` (up) and `npm run migrate:undo` (down)
+
+The user connected this to their work experience: `docker compose exec app npm run db:migrate` -- which does the same thing inside a Docker container.
 
 ---
 

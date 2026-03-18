@@ -23,7 +23,7 @@
 |-----|-------|--------|------|-------|
 | 6 | Database Connection & Error Handling | ✅ | Mar 16 | Quiz: 7.5/8 - DI, error handling, super, Omit<T,K> |
 | 7 | Database Fundamentals | ✅ | Mar 17 | Quiz: 5/5 - SQL/NoSQL, keys, relationships, indexes |
-| 8 | SQL Operations | ⬜ | | |
+| 8 | SQL Operations | ✅ | Mar 18 | Quiz: 10/10 - CRUD SQL, orWhere/whereIn query builder, migrations |
 | 9 | Repository Layer Basics | ⬜ | | |
 | 10 | Repository Layer Advanced | ⬜ | | |
 
@@ -106,7 +106,7 @@
 |-----|-------|-------|---------|
 | 6 | Database Connection & Error Handling | 7.5/8 | ME1-2 ✅, ME3 ⚠️ (URL vs bind), Q1-3 ✅, B1-2 ✅ |
 | 7 | Database Fundamentals | 5/5 | Q1-3 ✅, B1-2 ✅, Ex1-3 ✅ |
-| 8 | SQL Operations | - | |
+| 8 | SQL Operations | 10/10 | Ex1 ✅ (all corrected), Q1-3 ✅, B1-2 ✅, Ex2-3 ✅ |
 | 9 | Repository Layer Basics | - | |
 | 10 | Repository Layer Advanced | - | |
 
@@ -141,7 +141,7 @@
 | Week | Total Score | Average |
 |------|-------------|---------|
 | 1 | 24/26 (Day 1-5) | 92% |
-| 2 | 12.5/13 (Day 6-7) | 96% |
+| 2 | 22.5/23 (Day 6-8) | 98% |
 | 3 | - | - |
 | 4 | - | - |
 | 5 | - | - |
