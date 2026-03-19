@@ -1,9 +1,9 @@
 # Day 33: Transaction Management
 
 ## 📚 What to Learn Today
-- **Topics**: Transaction list, add/edit forms, CRUD operations
+- **Topics**: Transaction list, add/edit forms, CRUD operations, modals
 - **Time**: ~50 minutes reading, ~50 minutes practice
-- **Goal**: Build complete transaction management UI
+- **Goal**: Build complete transaction management UI with Tailwind CSS
 
 ---
 
@@ -42,6 +42,18 @@ Modal Component:
 └── Escape key handler
 ```
 
+### 4. Filter State Management
+
+```typescript
+interface Filters {
+    type?: 'income' | 'expense'
+    categoryId?: string
+    startDate?: string
+    endDate?: string
+    search?: string
+}
+```
+
 ---
 
 ## 💻 Code to Type & Understand
@@ -55,28 +67,26 @@ Create `src/api/categories.ts`:
 // Categories API
 // ============================================
 
-import api from './client';
-import { Category } from '../types';
+import api from './client'
+import { Category } from '../types'
 
 export const categoriesApi = {
-    // Get all categories
     getAll: async (): Promise<Category[]> => {
-        const response = await api.get<Category[]>('/api/categories');
+        const response = await api.get<Category[]>('/api/v1/categories')
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to fetch categories');
+        throw new Error(response.error || 'Failed to fetch categories')
     },
 
-    // Get categories by type
     getByType: async (type: 'income' | 'expense'): Promise<Category[]> => {
-        const response = await api.get<Category[]>('/api/categories', { type });
+        const response = await api.get<Category[]>('/api/v1/categories', { type })
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to fetch categories');
+        throw new Error(response.error || 'Failed to fetch categories')
     },
-};
+}
 ```
 
 ### Step 2: Modal Component
@@ -88,167 +98,80 @@ Create `src/components/Modal.tsx`:
 // Modal Component
 // ============================================
 
-import React, { useEffect, useRef } from 'react';
-import '../styles/Modal.css';
+import { useEffect, useRef } from 'react'
 
 interface ModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    title: string;
-    children: React.ReactNode;
-    size?: 'small' | 'medium' | 'large';
+    isOpen: boolean
+    onClose: () => void
+    title: string
+    children: React.ReactNode
+    size?: 'sm' | 'md' | 'lg'
 }
 
-function Modal({ isOpen, onClose, title, children, size = 'medium' }: ModalProps) {
-    const modalRef = useRef<HTMLDivElement>(null);
+export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+    const modalRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                onClose();
-            }
-        };
+            if (e.key === 'Escape') onClose()
+        }
 
         if (isOpen) {
-            document.addEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'hidden';
+            document.addEventListener('keydown', handleEscape)
+            document.body.style.overflow = 'hidden'
         }
 
         return () => {
-            document.removeEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen, onClose]);
-
-    if (!isOpen) return null;
-
-    const handleOverlayClick = (e: React.MouseEvent) => {
-        if (e.target === e.currentTarget) {
-            onClose();
+            document.removeEventListener('keydown', handleEscape)
+            document.body.style.overflow = 'unset'
         }
-    };
+    }, [isOpen, onClose])
+
+    if (!isOpen) return null
+
+    const sizeClasses = {
+        sm: 'max-w-md',
+        md: 'max-w-lg',
+        lg: 'max-w-2xl',
+    }
 
     return (
-        <div className="modal-overlay" onClick={handleOverlayClick}>
-            <div className={`modal-content ${size}`} ref={modalRef}>
-                <div className="modal-header">
-                    <h2>{title}</h2>
-                    <button className="modal-close" onClick={onClose}>
-                        ×
-                    </button>
-                </div>
-                <div className="modal-body">
-                    {children}
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+            {/* Backdrop */}
+            <div
+                className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+                onClick={onClose}
+            />
+
+            {/* Modal */}
+            <div className="flex min-h-full items-center justify-center p-4">
+                <div
+                    ref={modalRef}
+                    className={`relative bg-white rounded-xl shadow-xl w-full ${sizeClasses[size]} transform transition-all`}
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+                        <button
+                            onClick={onClose}
+                            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4">{children}</div>
                 </div>
             </div>
         </div>
-    );
-}
-
-export default Modal;
-```
-
-### Step 3: Modal Styles
-
-Create `src/styles/Modal.css`:
-
-```css
-/* ============================================
-   Modal Styles
-   ============================================ */
-
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 20px;
-    animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.modal-content {
-    background: white;
-    border-radius: 16px;
-    width: 100%;
-    max-height: 90vh;
-    overflow-y: auto;
-    animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.modal-content.small {
-    max-width: 400px;
-}
-
-.modal-content.medium {
-    max-width: 500px;
-}
-
-.modal-content.large {
-    max-width: 700px;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 24px;
-    border-bottom: 1px solid #eee;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 1.3rem;
-    color: #333;
-}
-
-.modal-close {
-    width: 36px;
-    height: 36px;
-    border: none;
-    background: #f0f0f0;
-    border-radius: 50%;
-    font-size: 1.5rem;
-    color: #666;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.modal-close:hover {
-    background: #e0e0e0;
-    color: #333;
-}
-
-.modal-body {
-    padding: 24px;
+    )
 }
 ```
 
-### Step 4: Transaction Form Component
+### Step 3: Transaction Form Component
 
 Create `src/components/TransactionForm.tsx`:
 
@@ -257,439 +180,288 @@ Create `src/components/TransactionForm.tsx`:
 // Transaction Form Component
 // ============================================
 
-import React, { useState, useEffect } from 'react';
-import { Transaction, TransactionCreate, Category } from '../types';
-import { categoriesApi } from '../api/categories';
-import '../styles/TransactionForm.css';
+import { useState, useEffect } from 'react'
+import { Category, Transaction, TransactionCreate, CategoryType } from '../types'
+import { categoriesApi } from '../api/categories'
 
 interface TransactionFormProps {
-    transaction?: Transaction;
-    onSubmit: (data: TransactionCreate) => Promise<void>;
-    onCancel: () => void;
+    transaction?: Transaction
+    onSubmit: (data: TransactionCreate) => Promise<void>
+    onCancel: () => void
+    initialType?: CategoryType
 }
 
-function TransactionForm({ transaction, onSubmit, onCancel }: TransactionFormProps) {
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [loadingCategories, setLoadingCategories] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const [formData, setFormData] = useState({
-        type: transaction?.type || 'expense' as 'income' | 'expense',
-        category_id: transaction?.category_id || 0,
-        amount: transaction?.amount?.toString() || '',
-        description: transaction?.description || '',
-        date: transaction?.date || new Date().toISOString().split('T')[0],
-    });
-
-    const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+export function TransactionForm({ transaction, onSubmit, onCancel, initialType }: TransactionFormProps) {
+    const [type, setType] = useState<CategoryType>(transaction?.type || initialType || 'expense')
+    const [categoryId, setCategoryId] = useState(transaction?.category_id || '')
+    const [amount, setAmount] = useState(transaction?.amount?.toString() || '')
+    const [description, setDescription] = useState(transaction?.description || '')
+    const [date, setDate] = useState(transaction?.date || new Date().toISOString().split('T')[0])
+    const [categories, setCategories] = useState<Category[]>([])
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
 
     useEffect(() => {
-        fetchCategories();
-    }, []);
+        loadCategories()
+    }, [type])
 
-    useEffect(() => {
-        // Reset category when type changes
-        if (!transaction) {
-            setFormData(prev => ({ ...prev, category_id: 0 }));
-        }
-    }, [formData.type, transaction]);
-
-    const fetchCategories = async () => {
+    const loadCategories = async () => {
         try {
-            const data = await categoriesApi.getAll();
-            setCategories(data);
+            const data = await categoriesApi.getByType(type)
+            setCategories(data)
+            if (!categoryId || !data.find(c => c.id === categoryId)) {
+                setCategoryId(data[0]?.id || '')
+            }
         } catch (err) {
-            setError('Failed to load categories');
-        } finally {
-            setLoadingCategories(false);
+            console.error('Failed to load categories:', err)
         }
-    };
-
-    const filteredCategories = categories.filter(c => c.type === formData.type);
-
-    const validate = (): boolean => {
-        const errors: { [key: string]: string } = {};
-
-        if (!formData.category_id) {
-            errors.category_id = 'Please select a category';
-        }
-
-        if (!formData.amount || parseFloat(formData.amount) <= 0) {
-            errors.amount = 'Please enter a valid amount';
-        }
-
-        if (!formData.date) {
-            errors.date = 'Please select a date';
-        }
-
-        setFormErrors(errors);
-        return Object.keys(errors).length === 0;
-    };
-
-    const handleChange = (
-        e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-    ) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        
-        if (formErrors[name]) {
-            setFormErrors(prev => ({ ...prev, [name]: '' }));
-        }
-    };
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+        e.preventDefault()
+        setError('')
 
-        if (!validate()) return;
+        if (!categoryId) {
+            setError('Please select a category')
+            return
+        }
+
+        if (!amount || parseFloat(amount) <= 0) {
+            setError('Please enter a valid amount')
+            return
+        }
+
+        setLoading(true)
 
         try {
-            setLoading(true);
-            setError(null);
-
             await onSubmit({
-                category_id: formData.category_id,
-                amount: parseFloat(formData.amount),
-                description: formData.description,
-                date: formData.date,
-            });
+                category_id: categoryId,
+                amount: parseFloat(amount),
+                description,
+                date,
+                type,
+            })
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save transaction');
+            setError(err instanceof Error ? err.message : 'Failed to save transaction')
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
 
     return (
-        <form onSubmit={handleSubmit} className="transaction-form">
-            {error && <div className="form-error">{error}</div>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {error}
+                </div>
+            )}
 
             {/* Type Toggle */}
-            <div className="type-toggle">
-                <button
-                    type="button"
-                    className={`type-btn ${formData.type === 'income' ? 'active income' : ''}`}
-                    onClick={() => setFormData(prev => ({ ...prev, type: 'income' }))}
-                >
-                    💰 Income
-                </button>
-                <button
-                    type="button"
-                    className={`type-btn ${formData.type === 'expense' ? 'active expense' : ''}`}
-                    onClick={() => setFormData(prev => ({ ...prev, type: 'expense' }))}
-                >
-                    💸 Expense
-                </button>
+            <div>
+                <label className="label">Type</label>
+                <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                    <button
+                        type="button"
+                        onClick={() => setType('income')}
+                        className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${
+                            type === 'income'
+                                ? 'bg-green-500 text-white'
+                                : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                    >
+                        💰 Income
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setType('expense')}
+                        className={`flex-1 py-2 px-4 text-sm font-medium transition-colors ${
+                            type === 'expense'
+                                ? 'bg-red-500 text-white'
+                                : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                    >
+                        💸 Expense
+                    </button>
+                </div>
             </div>
 
             {/* Category */}
-            <div className="form-group">
-                <label>Category</label>
-                {loadingCategories ? (
-                    <div className="loading-text">Loading categories...</div>
-                ) : (
-                    <div className="category-grid">
-                        {filteredCategories.map(category => (
-                            <button
-                                key={category.id}
-                                type="button"
-                                className={`category-btn ${formData.category_id === category.id ? 'selected' : ''}`}
-                                onClick={() => setFormData(prev => ({ ...prev, category_id: category.id }))}
-                            >
-                                <span className="category-icon">{category.icon}</span>
-                                <span className="category-name">{category.name}</span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-                {formErrors.category_id && (
-                    <span className="error-text">{formErrors.category_id}</span>
-                )}
+            <div>
+                <label htmlFor="category" className="label">Category</label>
+                <select
+                    id="category"
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className="input"
+                    required
+                >
+                    <option value="">Select a category</option>
+                    {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                            {category.icon} {category.name}
+                        </option>
+                    ))}
+                </select>
             </div>
 
             {/* Amount */}
-            <div className="form-group">
-                <label htmlFor="amount">Amount</label>
-                <div className="amount-input">
-                    <span className="currency">$</span>
+            <div>
+                <label htmlFor="amount" className="label">Amount</label>
+                <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                     <input
-                        type="number"
                         id="amount"
-                        name="amount"
-                        value={formData.amount}
-                        onChange={handleChange}
-                        placeholder="0.00"
+                        type="number"
                         step="0.01"
-                        min="0"
-                        className={formErrors.amount ? 'error' : ''}
+                        min="0.01"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="input pl-8"
+                        placeholder="0.00"
+                        required
                     />
                 </div>
-                {formErrors.amount && (
-                    <span className="error-text">{formErrors.amount}</span>
-                )}
             </div>
 
             {/* Date */}
-            <div className="form-group">
-                <label htmlFor="date">Date</label>
+            <div>
+                <label htmlFor="date" className="label">Date</label>
                 <input
-                    type="date"
                     id="date"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleChange}
-                    className={formErrors.date ? 'error' : ''}
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="input"
+                    required
                 />
-                {formErrors.date && (
-                    <span className="error-text">{formErrors.date}</span>
-                )}
             </div>
 
             {/* Description */}
-            <div className="form-group">
-                <label htmlFor="description">Description (Optional)</label>
-                <textarea
+            <div>
+                <label htmlFor="description" className="label">Description (optional)</label>
+                <input
                     id="description"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    placeholder="Add a note..."
-                    rows={3}
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="input"
+                    placeholder="What was this for?"
+                    maxLength={500}
                 />
             </div>
 
             {/* Actions */}
-            <div className="form-actions">
-                <button type="button" className="btn-cancel" onClick={onCancel}>
+            <div className="flex justify-end space-x-3 pt-4">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="btn btn-secondary"
+                    disabled={loading}
+                >
                     Cancel
                 </button>
-                <button type="submit" className="btn-submit" disabled={loading}>
+                <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={loading}
+                >
                     {loading ? 'Saving...' : transaction ? 'Update' : 'Add Transaction'}
                 </button>
             </div>
         </form>
-    );
-}
-
-export default TransactionForm;
-```
-
-### Step 5: Transaction Form Styles
-
-Create `src/styles/TransactionForm.css`:
-
-```css
-/* ============================================
-   Transaction Form Styles
-   ============================================ */
-
-.transaction-form {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-}
-
-.form-error {
-    background: #fee;
-    color: #c00;
-    padding: 12px;
-    border-radius: 8px;
-    text-align: center;
-}
-
-/* Type Toggle */
-.type-toggle {
-    display: flex;
-    gap: 10px;
-}
-
-.type-btn {
-    flex: 1;
-    padding: 14px;
-    border: 2px solid #e0e0e0;
-    background: white;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.type-btn:hover {
-    border-color: #ccc;
-}
-
-.type-btn.active.income {
-    border-color: #2ecc71;
-    background: rgba(46, 204, 113, 0.1);
-    color: #2ecc71;
-}
-
-.type-btn.active.expense {
-    border-color: #e74c3c;
-    background: rgba(231, 76, 60, 0.1);
-    color: #e74c3c;
-}
-
-/* Form Groups */
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.form-group label {
-    font-weight: 600;
-    color: #333;
-}
-
-/* Category Grid */
-.category-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 10px;
-}
-
-.category-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 12px 8px;
-    border: 2px solid #e0e0e0;
-    background: white;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.category-btn:hover {
-    border-color: #3498db;
-    background: rgba(52, 152, 219, 0.05);
-}
-
-.category-btn.selected {
-    border-color: #3498db;
-    background: rgba(52, 152, 219, 0.1);
-}
-
-.category-icon {
-    font-size: 1.5rem;
-}
-
-.category-name {
-    font-size: 0.75rem;
-    color: #666;
-    text-align: center;
-}
-
-/* Amount Input */
-.amount-input {
-    display: flex;
-    align-items: center;
-    border: 2px solid #e0e0e0;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.amount-input .currency {
-    padding: 12px 16px;
-    background: #f5f5f5;
-    color: #666;
-    font-weight: 600;
-}
-
-.amount-input input {
-    flex: 1;
-    padding: 12px;
-    border: none;
-    font-size: 1.2rem;
-    font-weight: 600;
-}
-
-.amount-input input:focus {
-    outline: none;
-}
-
-/* Inputs */
-.form-group input[type="date"],
-.form-group textarea {
-    padding: 12px;
-    border: 2px solid #e0e0e0;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-family: inherit;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: #3498db;
-}
-
-.form-group input.error,
-.form-group textarea.error {
-    border-color: #e74c3c;
-}
-
-.error-text {
-    color: #e74c3c;
-    font-size: 0.85rem;
-}
-
-.loading-text {
-    color: #666;
-    padding: 20px;
-    text-align: center;
-}
-
-/* Actions */
-.form-actions {
-    display: flex;
-    gap: 12px;
-    padding-top: 10px;
-}
-
-.btn-cancel {
-    flex: 1;
-    padding: 14px;
-    border: 2px solid #e0e0e0;
-    background: white;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-cancel:hover {
-    background: #f5f5f5;
-}
-
-.btn-submit {
-    flex: 2;
-    padding: 14px;
-    border: none;
-    background: #3498db;
-    color: white;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-submit:hover:not(:disabled) {
-    background: #2980b9;
-}
-
-.btn-submit:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
+    )
 }
 ```
 
-### Step 6: Transactions Page
+### Step 4: Transaction List Item Component
+
+Create `src/components/TransactionListItem.tsx`:
+
+```tsx
+// ============================================
+// Transaction List Item Component
+// ============================================
+
+import { Transaction } from '../types'
+
+interface TransactionListItemProps {
+    transaction: Transaction
+    onEdit: (transaction: Transaction) => void
+    onDelete: (transaction: Transaction) => void
+}
+
+export function TransactionListItem({ transaction, onEdit, onDelete }: TransactionListItemProps) {
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+        }).format(amount)
+    }
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        })
+    }
+
+    return (
+        <div className="flex items-center p-4 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
+            {/* Icon */}
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                transaction.type === 'income' ? 'bg-green-100' : 'bg-red-100'
+            }`}>
+                <span className="text-xl">{transaction.category_icon}</span>
+            </div>
+
+            {/* Details */}
+            <div className="ml-4 flex-1 min-w-0">
+                <p className="font-medium text-gray-900 truncate">
+                    {transaction.description || transaction.category_name}
+                </p>
+                <p className="text-sm text-gray-500">
+                    {transaction.category_name} • {formatDate(transaction.date)}
+                </p>
+            </div>
+
+            {/* Amount */}
+            <div className="ml-4 text-right">
+                <p className={`font-semibold ${
+                    transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                    {transaction.type === 'income' ? '+' : '-'}
+                    {formatCurrency(transaction.amount)}
+                </p>
+            </div>
+
+            {/* Actions */}
+            <div className="ml-4 flex items-center space-x-2">
+                <button
+                    onClick={() => onEdit(transaction)}
+                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                    title="Edit"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                </button>
+                <button
+                    onClick={() => onDelete(transaction)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    )
+}
+```
+
+### Step 5: Transactions Page
 
 Create `src/pages/Transactions.tsx`:
 
@@ -698,643 +470,452 @@ Create `src/pages/Transactions.tsx`:
 // Transactions Page
 // ============================================
 
-import React, { useState, useEffect } from 'react';
-import Layout from '../components/Layout';
-import Modal from '../components/Modal';
-import TransactionForm from '../components/TransactionForm';
-import { transactionsApi } from '../api/transactions';
-import { Transaction, TransactionCreate } from '../types';
-import '../styles/Transactions.css';
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Layout } from '../components/Layout'
+import { Modal } from '../components/Modal'
+import { TransactionForm } from '../components/TransactionForm'
+import { TransactionListItem } from '../components/TransactionListItem'
+import { transactionsApi } from '../api/transactions'
+import { categoriesApi } from '../api/categories'
+import { Transaction, Category, CategoryType, TransactionCreate } from '../types'
 
-function Transactions() {
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    
-    // Modal states
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
-    const [deleteTransaction, setDeleteTransaction] = useState<Transaction | null>(null);
+export function Transactions() {
+    const [searchParams, setSearchParams] = useSearchParams()
+    const [transactions, setTransactions] = useState<Transaction[]>([])
+    const [categories, setCategories] = useState<Category[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
-    // Filter states
-    const [filters, setFilters] = useState({
-        type: '' as '' | 'income' | 'expense',
-        startDate: '',
-        endDate: '',
-    });
+    // Filters
+    const [typeFilter, setTypeFilter] = useState<CategoryType | ''>('')
+    const [categoryFilter, setCategoryFilter] = useState('')
+    const [startDate, setStartDate] = useState('')
+    const [endDate, setEndDate] = useState('')
 
     // Pagination
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const pageSize = 10;
+    const [page, setPage] = useState(1)
+    const [totalPages, setTotalPages] = useState(1)
+    const limit = 10
+
+    // Modal state
+    const [showModal, setShowModal] = useState(false)
+    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+    const [deleteConfirm, setDeleteConfirm] = useState<Transaction | null>(null)
+
+    // Check URL params for initial type
+    const initialType = searchParams.get('type') as CategoryType | null
 
     useEffect(() => {
-        fetchTransactions();
-    }, [page, filters]);
+        loadCategories()
+    }, [])
 
-    const fetchTransactions = async () => {
-        try {
-            setLoading(true);
-            const result = await transactionsApi.getAll({
-                ...filters,
-                type: filters.type || undefined,
-                limit: pageSize,
-                offset: (page - 1) * pageSize,
-            });
-            setTransactions(result.transactions);
-            setTotalPages(result.totalPages);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load transactions');
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        loadTransactions()
+    }, [page, typeFilter, categoryFilter, startDate, endDate])
+
+    useEffect(() => {
+        if (initialType) {
+            setTypeFilter(initialType)
+            setShowModal(true)
+            setSearchParams({})
         }
-    };
+    }, [initialType])
 
-    const handleAddTransaction = async (data: TransactionCreate) => {
-        await transactionsApi.create(data);
-        setShowAddModal(false);
-        fetchTransactions();
-    };
+    const loadCategories = async () => {
+        try {
+            const data = await categoriesApi.getAll()
+            setCategories(data)
+        } catch (err) {
+            console.error('Failed to load categories:', err)
+        }
+    }
 
-    const handleEditTransaction = async (data: TransactionCreate) => {
-        if (!editTransaction) return;
-        await transactionsApi.update(editTransaction.id, data);
-        setEditTransaction(null);
-        fetchTransactions();
-    };
+    const loadTransactions = async () => {
+        try {
+            setLoading(true)
+            setError(null)
 
-    const handleDeleteTransaction = async () => {
-        if (!deleteTransaction) return;
-        await transactionsApi.delete(deleteTransaction.id);
-        setDeleteTransaction(null);
-        fetchTransactions();
-    };
+            const result = await transactionsApi.getAll({
+                page,
+                limit,
+                type: typeFilter || undefined,
+                categoryId: categoryFilter || undefined,
+                startDate: startDate || undefined,
+                endDate: endDate || undefined,
+            })
 
-    const formatCurrency = (amount: number): string => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-        }).format(amount);
-    };
+            setTransactions(result.transactions)
+            setTotalPages(result.pagination.totalPages)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load transactions')
+        } finally {
+            setLoading(false)
+        }
+    }
 
-    const formatDate = (dateString: string): string => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-        });
-    };
+    const handleCreate = async (data: TransactionCreate) => {
+        await transactionsApi.create(data)
+        setShowModal(false)
+        loadTransactions()
+    }
+
+    const handleUpdate = async (data: TransactionCreate) => {
+        if (!editingTransaction) return
+        await transactionsApi.update(editingTransaction.id, data)
+        setEditingTransaction(null)
+        loadTransactions()
+    }
+
+    const handleDelete = async () => {
+        if (!deleteConfirm) return
+        try {
+            await transactionsApi.delete(deleteConfirm.id)
+            setDeleteConfirm(null)
+            loadTransactions()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to delete transaction')
+        }
+    }
+
+    const clearFilters = () => {
+        setTypeFilter('')
+        setCategoryFilter('')
+        setStartDate('')
+        setEndDate('')
+        setPage(1)
+    }
+
+    const hasFilters = typeFilter || categoryFilter || startDate || endDate
 
     return (
         <Layout>
-            <div className="transactions-page">
+            <div className="space-y-6">
                 {/* Header */}
-                <div className="page-header">
-                    <h1>Transactions</h1>
-                    <button 
-                        className="add-btn"
-                        onClick={() => setShowAddModal(true)}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
+                        <p className="text-gray-500 mt-1">Manage your income and expenses</p>
+                    </div>
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="btn btn-primary mt-4 sm:mt-0"
                     >
                         + Add Transaction
                     </button>
                 </div>
 
                 {/* Filters */}
-                <div className="filters-bar">
-                    <select
-                        value={filters.type}
-                        onChange={(e) => setFilters(prev => ({ 
-                            ...prev, 
-                            type: e.target.value as '' | 'income' | 'expense' 
-                        }))}
-                    >
-                        <option value="">All Types</option>
-                        <option value="income">Income</option>
-                        <option value="expense">Expense</option>
-                    </select>
+                <div className="card">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div>
+                            <label className="label">Type</label>
+                            <select
+                                value={typeFilter}
+                                onChange={(e) => {
+                                    setTypeFilter(e.target.value as CategoryType | '')
+                                    setPage(1)
+                                }}
+                                className="input"
+                            >
+                                <option value="">All Types</option>
+                                <option value="income">Income</option>
+                                <option value="expense">Expense</option>
+                            </select>
+                        </div>
 
-                    <input
-                        type="date"
-                        value={filters.startDate}
-                        onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                        placeholder="Start Date"
-                    />
+                        <div>
+                            <label className="label">Category</label>
+                            <select
+                                value={categoryFilter}
+                                onChange={(e) => {
+                                    setCategoryFilter(e.target.value)
+                                    setPage(1)
+                                }}
+                                className="input"
+                            >
+                                <option value="">All Categories</option>
+                                {categories
+                                    .filter(c => !typeFilter || c.type === typeFilter)
+                                    .map((category) => (
+                                        <option key={category.id} value={category.id}>
+                                            {category.icon} {category.name}
+                                        </option>
+                                    ))}
+                            </select>
+                        </div>
 
-                    <input
-                        type="date"
-                        value={filters.endDate}
-                        onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                        placeholder="End Date"
-                    />
+                        <div>
+                            <label className="label">Start Date</label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => {
+                                    setStartDate(e.target.value)
+                                    setPage(1)
+                                }}
+                                className="input"
+                            />
+                        </div>
 
-                    <button 
-                        className="clear-filters"
-                        onClick={() => setFilters({ type: '', startDate: '', endDate: '' })}
-                    >
-                        Clear
-                    </button>
+                        <div>
+                            <label className="label">End Date</label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => {
+                                    setEndDate(e.target.value)
+                                    setPage(1)
+                                }}
+                                className="input"
+                            />
+                        </div>
+
+                        <div className="flex items-end">
+                            {hasFilters && (
+                                <button
+                                    onClick={clearFilters}
+                                    className="btn btn-secondary w-full"
+                                >
+                                    Clear Filters
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Error */}
                 {error && (
-                    <div className="error-banner">
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                         {error}
-                        <button onClick={fetchTransactions}>Retry</button>
                     </div>
                 )}
 
-                {/* Transactions List */}
+                {/* Transaction List */}
                 {loading ? (
-                    <div className="loading-state">Loading transactions...</div>
+                    <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="card animate-pulse">
+                                <div className="flex items-center">
+                                    <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                                    <div className="ml-4 flex-1">
+                                        <div className="h-4 bg-gray-200 rounded w-48"></div>
+                                        <div className="h-3 bg-gray-200 rounded w-32 mt-2"></div>
+                                    </div>
+                                    <div className="h-5 bg-gray-200 rounded w-24"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 ) : transactions.length === 0 ? (
-                    <div className="empty-state">
-                        <p>No transactions found</p>
-                        <button onClick={() => setShowAddModal(true)}>
-                            Add your first transaction
-                        </button>
+                    <div className="card text-center py-12">
+                        <span className="text-4xl">📭</span>
+                        <h3 className="text-lg font-medium text-gray-900 mt-4">No transactions found</h3>
+                        <p className="text-gray-500 mt-2">
+                            {hasFilters
+                                ? 'Try adjusting your filters'
+                                : 'Start by adding your first transaction'}
+                        </p>
+                        {!hasFilters && (
+                            <button
+                                onClick={() => setShowModal(true)}
+                                className="btn btn-primary mt-4"
+                            >
+                                Add Transaction
+                            </button>
+                        )}
                     </div>
                 ) : (
-                    <>
-                        <div className="transactions-table">
-                            <div className="table-header">
-                                <span>Category</span>
-                                <span>Description</span>
-                                <span>Date</span>
-                                <span>Amount</span>
-                                <span>Actions</span>
-                            </div>
-
-                            {transactions.map(transaction => (
-                                <div key={transaction.id} className="table-row">
-                                    <div className="cell category">
-                                        <span className="icon">{transaction.category_icon}</span>
-                                        <span>{transaction.category_name}</span>
-                                    </div>
-                                    <div className="cell description">
-                                        {transaction.description || '-'}
-                                    </div>
-                                    <div className="cell date">
-                                        {formatDate(transaction.date)}
-                                    </div>
-                                    <div className={`cell amount ${transaction.type}`}>
-                                        {transaction.type === 'income' ? '+' : '-'}
-                                        {formatCurrency(transaction.amount)}
-                                    </div>
-                                    <div className="cell actions">
-                                        <button 
-                                            className="edit-btn"
-                                            onClick={() => setEditTransaction(transaction)}
-                                        >
-                                            ✏️
-                                        </button>
-                                        <button 
-                                            className="delete-btn"
-                                            onClick={() => setDeleteTransaction(transaction)}
-                                        >
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="pagination">
-                                <button 
-                                    disabled={page === 1}
-                                    onClick={() => setPage(p => p - 1)}
-                                >
-                                    Previous
-                                </button>
-                                <span>Page {page} of {totalPages}</span>
-                                <button 
-                                    disabled={page === totalPages}
-                                    onClick={() => setPage(p => p + 1)}
-                                >
-                                    Next
-                                </button>
-                            </div>
-                        )}
-                    </>
+                    <div className="space-y-3">
+                        {transactions.map((transaction) => (
+                            <TransactionListItem
+                                key={transaction.id}
+                                transaction={transaction}
+                                onEdit={setEditingTransaction}
+                                onDelete={setDeleteConfirm}
+                            />
+                        ))}
+                    </div>
                 )}
 
-                {/* Add Modal */}
-                <Modal
-                    isOpen={showAddModal}
-                    onClose={() => setShowAddModal(false)}
-                    title="Add Transaction"
-                >
-                    <TransactionForm
-                        onSubmit={handleAddTransaction}
-                        onCancel={() => setShowAddModal(false)}
-                    />
-                </Modal>
-
-                {/* Edit Modal */}
-                <Modal
-                    isOpen={!!editTransaction}
-                    onClose={() => setEditTransaction(null)}
-                    title="Edit Transaction"
-                >
-                    {editTransaction && (
-                        <TransactionForm
-                            transaction={editTransaction}
-                            onSubmit={handleEditTransaction}
-                            onCancel={() => setEditTransaction(null)}
-                        />
-                    )}
-                </Modal>
-
-                {/* Delete Confirmation */}
-                <Modal
-                    isOpen={!!deleteTransaction}
-                    onClose={() => setDeleteTransaction(null)}
-                    title="Delete Transaction"
-                    size="small"
-                >
-                    <div className="delete-confirm">
-                        <p>Are you sure you want to delete this transaction?</p>
-                        <p className="delete-details">
-                            {deleteTransaction?.category_icon} {deleteTransaction?.category_name} - {' '}
-                            {deleteTransaction && formatCurrency(deleteTransaction.amount)}
-                        </p>
-                        <div className="delete-actions">
-                            <button 
-                                className="btn-cancel"
-                                onClick={() => setDeleteTransaction(null)}
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                className="btn-delete"
-                                onClick={handleDeleteTransaction}
-                            >
-                                Delete
-                            </button>
-                        </div>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-center space-x-2">
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page === 1}
+                            className="btn btn-secondary disabled:opacity-50"
+                        >
+                            Previous
+                        </button>
+                        <span className="text-gray-600">
+                            Page {page} of {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page === totalPages}
+                            className="btn btn-secondary disabled:opacity-50"
+                        >
+                            Next
+                        </button>
                     </div>
-                </Modal>
+                )}
             </div>
-        </Layout>
-    );
-}
 
-export default Transactions;
+            {/* Add/Edit Modal */}
+            <Modal
+                isOpen={showModal || !!editingTransaction}
+                onClose={() => {
+                    setShowModal(false)
+                    setEditingTransaction(null)
+                }}
+                title={editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
+            >
+                <TransactionForm
+                    transaction={editingTransaction || undefined}
+                    onSubmit={editingTransaction ? handleUpdate : handleCreate}
+                    onCancel={() => {
+                        setShowModal(false)
+                        setEditingTransaction(null)
+                    }}
+                    initialType={typeFilter as CategoryType || undefined}
+                />
+            </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                isOpen={!!deleteConfirm}
+                onClose={() => setDeleteConfirm(null)}
+                title="Delete Transaction"
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <p className="text-gray-600">
+                        Are you sure you want to delete this transaction? This action cannot be undone.
+                    </p>
+                    <div className="flex justify-end space-x-3">
+                        <button
+                            onClick={() => setDeleteConfirm(null)}
+                            className="btn btn-secondary"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleDelete}
+                            className="btn btn-danger"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        </Layout>
+    )
+}
 ```
 
-### Step 7: Transactions Page Styles
+### Step 6: Update App Routes
 
-Create `src/styles/Transactions.css`:
+Update `src/App.tsx`:
 
-```css
-/* ============================================
-   Transactions Page Styles
-   ============================================ */
+```tsx
+// ============================================
+// App Component
+// ============================================
 
-.transactions-page {
-    max-width: 1200px;
-    margin: 0 auto;
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { Login } from './pages/Login'
+import { Register } from './pages/Register'
+import { Dashboard } from './pages/Dashboard'
+import { Transactions } from './pages/Transactions'
+
+function Reports() {
+    return <div className="p-8"><h1>Reports - Coming tomorrow!</h1></div>
 }
 
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
+function App() {
+    return (
+        <BrowserRouter>
+            <AuthProvider>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <ProtectedRoute>
+                                <Dashboard />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/transactions"
+                        element={
+                            <ProtectedRoute>
+                                <Transactions />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/reports"
+                        element={
+                            <ProtectedRoute>
+                                <Reports />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+            </AuthProvider>
+        </BrowserRouter>
+    )
 }
 
-.page-header h1 {
-    margin: 0;
-    color: #333;
-}
-
-.add-btn {
-    padding: 12px 24px;
-    background: #3498db;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.add-btn:hover {
-    background: #2980b9;
-}
-
-/* Filters */
-.filters-bar {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-}
-
-.filters-bar select,
-.filters-bar input {
-    padding: 10px 16px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    font-size: 0.95rem;
-}
-
-.filters-bar select:focus,
-.filters-bar input:focus {
-    outline: none;
-    border-color: #3498db;
-}
-
-.clear-filters {
-    padding: 10px 16px;
-    background: #f5f5f5;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    color: #666;
-}
-
-.clear-filters:hover {
-    background: #e0e0e0;
-}
-
-/* Error Banner */
-.error-banner {
-    background: #fee;
-    color: #c00;
-    padding: 16px;
-    border-radius: 8px;
-    margin-bottom: 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.error-banner button {
-    padding: 8px 16px;
-    background: #c00;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-/* Loading & Empty States */
-.loading-state,
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    background: white;
-    border-radius: 12px;
-    color: #666;
-}
-
-.empty-state button {
-    margin-top: 16px;
-    padding: 12px 24px;
-    background: #3498db;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-/* Transactions Table */
-.transactions-table {
-    background: white;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.table-header {
-    display: grid;
-    grid-template-columns: 2fr 2fr 1fr 1.5fr 100px;
-    gap: 16px;
-    padding: 16px 20px;
-    background: #f8f9fa;
-    font-weight: 600;
-    color: #666;
-    font-size: 0.9rem;
-}
-
-.table-row {
-    display: grid;
-    grid-template-columns: 2fr 2fr 1fr 1.5fr 100px;
-    gap: 16px;
-    padding: 16px 20px;
-    border-bottom: 1px solid #f0f0f0;
-    align-items: center;
-    transition: background 0.2s;
-}
-
-.table-row:hover {
-    background: #f8f9fa;
-}
-
-.table-row:last-child {
-    border-bottom: none;
-}
-
-.cell {
-    display: flex;
-    align-items: center;
-}
-
-.cell.category {
-    gap: 10px;
-}
-
-.cell.category .icon {
-    font-size: 1.3rem;
-}
-
-.cell.description {
-    color: #666;
-}
-
-.cell.date {
-    color: #888;
-    font-size: 0.9rem;
-}
-
-.cell.amount {
-    font-weight: 700;
-    font-size: 1.05rem;
-}
-
-.cell.amount.income {
-    color: #2ecc71;
-}
-
-.cell.amount.expense {
-    color: #e74c3c;
-}
-
-.cell.actions {
-    gap: 8px;
-}
-
-.edit-btn,
-.delete-btn {
-    width: 36px;
-    height: 36px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: all 0.2s;
-}
-
-.edit-btn {
-    background: rgba(52, 152, 219, 0.1);
-}
-
-.edit-btn:hover {
-    background: rgba(52, 152, 219, 0.2);
-}
-
-.delete-btn {
-    background: rgba(231, 76, 60, 0.1);
-}
-
-.delete-btn:hover {
-    background: rgba(231, 76, 60, 0.2);
-}
-
-/* Pagination */
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 20px;
-    margin-top: 24px;
-}
-
-.pagination button {
-    padding: 10px 20px;
-    border: 2px solid #e0e0e0;
-    background: white;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.pagination button:hover:not(:disabled) {
-    border-color: #3498db;
-    color: #3498db;
-}
-
-.pagination button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.pagination span {
-    color: #666;
-}
-
-/* Delete Confirmation */
-.delete-confirm {
-    text-align: center;
-}
-
-.delete-confirm p {
-    margin: 0 0 16px 0;
-    color: #333;
-}
-
-.delete-details {
-    font-size: 1.1rem;
-    font-weight: 600;
-    padding: 16px;
-    background: #f8f9fa;
-    border-radius: 8px;
-}
-
-.delete-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 24px;
-}
-
-.delete-actions .btn-cancel {
-    flex: 1;
-    padding: 12px;
-    border: 2px solid #e0e0e0;
-    background: white;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-.delete-actions .btn-delete {
-    flex: 1;
-    padding: 12px;
-    border: none;
-    background: #e74c3c;
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .table-header {
-        display: none;
-    }
-
-    .table-row {
-        grid-template-columns: 1fr;
-        gap: 8px;
-    }
-
-    .cell.actions {
-        justify-content: flex-end;
-    }
-}
+export default App
 ```
 
 ---
 
 ## ✍️ Exercises
 
-### Exercise 1: Add Search Functionality
+### Exercise 1: Add Search
 Add a search input that:
 - Filters transactions by description
-- Debounces the search input
-- Highlights matching text
+- Debounces input (wait 300ms after typing stops)
+- Shows "No results" message when search has no matches
 
 ### Exercise 2: Add Bulk Delete
-Implement bulk delete that:
-- Adds checkboxes to each row
-- Shows "Select All" option
-- Confirms before deleting multiple
+Add functionality to:
+- Select multiple transactions with checkboxes
+- Show "Delete Selected" button when items are selected
+- Confirm and delete all selected transactions
 
-### Exercise 3: Add Export Feature
-Add an export button that:
-- Exports filtered transactions to CSV
-- Includes all visible columns
-- Names file with date range
+### Exercise 3: Add Export
+Add an "Export" button that:
+- Exports current filtered transactions to CSV
+- Includes all transaction details
+- Names file with current date
 
 ---
 
 ## ❓ Quiz Questions
 
 ### Q1: Controlled Forms
-Why do we use controlled inputs (value + onChange) instead of uncontrolled inputs?
+Why do we use controlled inputs (value + onChange) instead of uncontrolled inputs (ref)?
 
 **Your Answer**: 
 
 
 ### Q2: Modal Accessibility
-What accessibility features should a modal have?
+What accessibility features should a modal have? (List at least 3)
 
 **Your Answer**: 
 
 
-### Q3: Optimistic Updates
-What are optimistic updates and when would you use them?
+### Q3: Pagination
+Why do we reset page to 1 when filters change?
 
 **Your Answer**: 
 
@@ -1343,12 +924,12 @@ What are optimistic updates and when would you use them?
 
 ## 📝 Bonus Questions (Optional)
 
-### B1: How would you implement undo functionality for deleted transactions?
+### B1: How would you implement optimistic updates (showing changes immediately before API confirms)?
 
 **Your Answer**: 
 
 
-### B2: How would you handle offline transaction creation?
+### B2: How would you handle offline support for transaction creation?
 
 **Your Answer**: 
 
@@ -1357,15 +938,15 @@ What are optimistic updates and when would you use them?
 
 ## ✅ Day 33 Checklist
 
-- [ ] Create Categories API
+- [ ] Create Categories API client
 - [ ] Build Modal component
 - [ ] Build TransactionForm component
-- [ ] Build Transactions page with list
-- [ ] Implement create transaction
-- [ ] Implement edit transaction
-- [ ] Implement delete transaction
-- [ ] Add filters (type, date range)
+- [ ] Build TransactionListItem component
+- [ ] Create Transactions page with filters
+- [ ] Implement CRUD operations
 - [ ] Add pagination
+- [ ] Add delete confirmation
+- [ ] Update App routes
 - [ ] Complete Exercise 1 (Search)
 - [ ] Complete Exercise 2 (Bulk Delete)
 - [ ] Complete Exercise 3 (Export)
@@ -1374,4 +955,4 @@ What are optimistic updates and when would you use them?
 ---
 
 ## 🔗 Next Day Preview
-Tomorrow you'll build **Charts & Reports** - adding data visualization with Recharts for financial insights.
+Tomorrow you'll build **Charts & Reports** - adding data visualization with Recharts for financial insights with Tailwind CSS styling.

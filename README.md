@@ -70,12 +70,23 @@ Learn/JavaScript/
 
 ## Tech Stack You'll Learn
 
-### Backend
+### Learning Phase (Day 1-20)
+During the fundamentals phase, you'll learn concepts using simplified tools:
 - **Runtime**: Node.js
 - **Language**: TypeScript
 - **Framework**: Fastify
-- **Database**: PostgreSQL
+- **Database**: Simulated (fakeDb) - focus on patterns, not setup
+- **Auth**: JWT, bcrypt concepts
+
+### Final Project (Day 26-35)
+The Finance Tracker uses a production-ready stack matching the LEARNING_MODULE:
+- **Runtime**: Node.js
+- **Language**: TypeScript
+- **Framework**: Fastify
+- **Database**: PostgreSQL (via Docker)
+- **ORM**: Sequelize (raw SQL queries)
 - **Auth**: JWT, bcrypt
+- **Containerization**: Docker
 
 ### Frontend
 - **Library**: React

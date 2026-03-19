@@ -1,9 +1,10 @@
 # Day 26: Project Setup & Database Design
 
 ## 📚 What to Learn Today
-- **Topics**: Finance Tracker project setup, database schema design
-- **Time**: ~40 minutes reading, ~45 minutes practice
-- **Goal**: Set up the complete project structure and design the database
+- **Reference**: [LEARNING_MODULE.md](../../Modules/LEARNING_MODULE.md) - Module 3 & 4
+- **Topics**: Finance Tracker project setup, Docker, PostgreSQL, Fastify, Sequelize
+- **Time**: ~45 minutes reading, ~45 minutes practice
+- **Goal**: Set up the complete project structure with production-ready stack
 
 ---
 
@@ -24,13 +25,15 @@ Finance Tracker Features:
 └─────────────────────────────────────────────┘
 ```
 
-### 2. Tech Stack
+### 2. Tech Stack (Production-Ready)
 
 ```
 Backend:
-├── Node.js + Express
+├── Node.js + Fastify (Web Framework)
 ├── TypeScript
-├── SQLite (Database)
+├── PostgreSQL (Database)
+├── Sequelize (ORM - Raw SQL)
+├── Docker (Containerization)
 ├── JWT (Authentication)
 └── bcrypt (Password hashing)
 
@@ -38,21 +41,32 @@ Frontend:
 ├── React + TypeScript
 ├── React Router
 ├── Recharts (Charts)
-└── CSS Modules
+└── Tailwind CSS (Styling)
 ```
 
-### 3. Database Schema Design
+### 3. Why This Stack?
+
+| Technology | Why We Use It |
+|------------|---------------|
+| **Fastify** | Fast, TypeScript-friendly, plugin ecosystem |
+| **PostgreSQL** | Production-grade, powerful SQL features |
+| **Docker** | Consistent environment, easy setup |
+| **Sequelize** | Raw SQL with safety (parameterized queries) |
+| **Tailwind CSS** | Utility-first, rapid UI development |
+
+### 4. Database Schema Design
 
 ```
 ┌──────────────────┐     ┌──────────────────┐
 │      users       │     │    categories    │
 ├──────────────────┤     ├──────────────────┤
-│ id (PK)          │     │ id (PK)          │
+│ id (UUID, PK)    │     │ id (UUID, PK)    │
 │ email            │     │ name             │
-│ password_hash    │     │ type (income/    │
-│ name             │     │       expense)   │
-│ created_at       │     │ icon             │
-│ updated_at       │     │ user_id (FK)     │
+│ password         │     │ type (income/    │
+│ full_name        │     │       expense)   │
+│ email_verified   │     │ icon             │
+│ created_at       │     │ user_id (FK)     │
+│ updated_at       │     │ created_at       │
 └────────┬─────────┘     └────────┬─────────┘
          │                        │
          │    ┌───────────────────┘
@@ -61,7 +75,7 @@ Frontend:
 ┌──────────────────┐
 │   transactions   │
 ├──────────────────┤
-│ id (PK)          │
+│ id (UUID, PK)    │
 │ user_id (FK)     │
 │ category_id (FK) │
 │ amount           │
@@ -73,42 +87,42 @@ Frontend:
 └──────────────────┘
 ```
 
-### 4. Project Structure
+### 5. Project Structure
 
 ```
 finance-tracker/
-├── src/
-│   ├── config/
-│   │   └── database.ts
-│   ├── controllers/
-│   │   ├── authController.ts
-│   │   ├── transactionController.ts
-│   │   └── categoryController.ts
-│   ├── middleware/
-│   │   ├── auth.ts
-│   │   └── errorHandler.ts
-│   ├── models/
-│   │   └── types.ts
-│   ├── repositories/
-│   │   ├── userRepository.ts
-│   │   ├── transactionRepository.ts
-│   │   └── categoryRepository.ts
-│   ├── routes/
-│   │   ├── authRoutes.ts
-│   │   ├── transactionRoutes.ts
-│   │   └── categoryRoutes.ts
-│   ├── services/
-│   │   ├── authService.ts
-│   │   ├── transactionService.ts
-│   │   └── reportService.ts
-│   ├── utils/
-│   │   └── helpers.ts
-│   └── index.ts
-├── migrations/
-│   └── 001_initial_schema.sql
-├── package.json
-├── tsconfig.json
-└── .env
+├── backend/
+│   ├── src/
+│   │   ├── config/
+│   │   │   └── database.ts
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       ├── controllers/
+│   │   │       │   ├── auth.controller.ts
+│   │   │       │   ├── transaction.controller.ts
+│   │   │       │   └── category.controller.ts
+│   │   │       ├── services/
+│   │   │       │   ├── auth.service.ts
+│   │   │       │   ├── transaction.service.ts
+│   │   │       │   └── report.service.ts
+│   │   │       └── repositories/
+│   │   │           ├── user.repository.ts
+│   │   │           ├── transaction.repository.ts
+│   │   │           └── category.repository.ts
+│   │   ├── types/
+│   │   │   └── index.ts
+│   │   └── index.ts
+│   ├── db/
+│   │   └── migrations/
+│   │       ├── 001-create-users-table.js
+│   │       ├── 002-create-categories-table.js
+│   │       └── 003-create-transactions-table.js
+│   ├── docker-compose.yml
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── .env
+└── frontend/
+    └── (Day 31+)
 ```
 
 ---
@@ -119,15 +133,19 @@ finance-tracker/
 
 ```bash
 # Create project directory
-mkdir finance-tracker-backend
-cd finance-tracker-backend
+mkdir finance-tracker
+cd finance-tracker
+mkdir backend
+cd backend
 
 # Initialize npm
 npm init -y
 
 # Install dependencies
-npm install express better-sqlite3 bcryptjs jsonwebtoken dotenv cors
-npm install -D typescript @types/node @types/express @types/better-sqlite3 @types/bcryptjs @types/jsonwebtoken @types/cors ts-node nodemon
+npm install fastify @fastify/cors @fastify/swagger @fastify/swagger-ui sequelize pg pg-hstore bcryptjs jsonwebtoken dotenv
+
+# Install dev dependencies
+npm install -D typescript @types/node @types/bcryptjs @types/jsonwebtoken ts-node nodemon sequelize-cli
 ```
 
 ### Step 2: TypeScript Configuration
@@ -137,9 +155,10 @@ Create `tsconfig.json`:
 ```json
 {
     "compilerOptions": {
-        "target": "ES2020",
-        "module": "commonjs",
-        "lib": ["ES2020"],
+        "target": "ES2022",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "lib": ["ES2022"],
         "outDir": "./dist",
         "rootDir": "./src",
         "strict": true,
@@ -149,7 +168,11 @@ Create `tsconfig.json`:
         "resolveJsonModule": true,
         "declaration": true,
         "declarationMap": true,
-        "sourceMap": true
+        "sourceMap": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"]
+        }
     },
     "include": ["src/**/*"],
     "exclude": ["node_modules", "dist"]
@@ -165,33 +188,132 @@ Update `package.json`:
     "name": "finance-tracker-backend",
     "version": "1.0.0",
     "description": "Personal Finance Tracker API",
+    "type": "module",
     "main": "dist/index.js",
     "scripts": {
-        "dev": "nodemon --exec ts-node src/index.ts",
+        "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
         "build": "tsc",
         "start": "node dist/index.js",
-        "migrate": "ts-node src/config/migrate.ts"
+        "db:migrate": "npx sequelize-cli db:migrate",
+        "db:migrate:undo": "npx sequelize-cli db:migrate:undo",
+        "db:seed": "npx sequelize-cli db:seed:all"
     },
-    "keywords": ["finance", "tracker", "api"],
+    "keywords": ["finance", "tracker", "api", "fastify"],
     "author": "",
     "license": "ISC"
 }
 ```
 
-### Step 4: Environment Variables
+### Step 4: Docker Compose for PostgreSQL
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: finance-tracker-db
+    environment:
+      POSTGRES_USER: finance_user
+      POSTGRES_PASSWORD: finance_password
+      POSTGRES_DB: finance_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance_user -d finance_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+```
+
+**Start PostgreSQL:**
+```bash
+docker-compose up -d
+```
+
+### Step 5: Environment Variables
 
 Create `.env`:
 
 ```env
+# Server
 PORT=3000
-JWT_SECRET=your-super-secret-key-change-in-production
+HOST=0.0.0.0
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=finance_tracker
+DB_USER=finance_user
+DB_PASSWORD=finance_password
+
+# JWT
+JWT_SECRET=your-super-secret-key-change-in-production-minimum-32-chars
 JWT_EXPIRES_IN=7d
-DATABASE_PATH=./data/finance.db
 ```
 
-### Step 5: Type Definitions
+Create `.env.example` (for sharing):
 
-Create `src/models/types.ts`:
+```env
+# Server
+PORT=3000
+HOST=0.0.0.0
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=finance_tracker
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+
+# JWT
+JWT_SECRET=your-secret-key-minimum-32-characters
+JWT_EXPIRES_IN=7d
+```
+
+### Step 6: Database Configuration
+
+Create `src/config/database.ts`:
+
+```typescript
+// ============================================
+// Database Configuration - Sequelize + PostgreSQL
+// ============================================
+
+import { Sequelize } from 'sequelize'
+import dotenv from 'dotenv'
+
+dotenv.config()
+
+const sequelize = new Sequelize({
+    dialect: 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    username: process.env.DB_USER || 'finance_user',
+    password: process.env.DB_PASSWORD || 'finance_password',
+    database: process.env.DB_NAME || 'finance_tracker',
+    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+    }
+})
+
+export default sequelize
+```
+
+### Step 7: Type Definitions
+
+Create `src/types/index.ts`:
 
 ```typescript
 // ============================================
@@ -200,62 +322,64 @@ Create `src/models/types.ts`:
 
 // User types
 export interface User {
-    id: number;
+    id: string;
     email: string;
-    password_hash: string;
-    name: string;
-    created_at: string;
-    updated_at: string;
+    password: string;
+    full_name: string;
+    email_verified: boolean;
+    created_at: Date;
+    updated_at: Date;
 }
 
 export interface UserCreate {
     email: string;
     password: string;
-    name: string;
+    full_name: string;
 }
 
 export interface UserResponse {
-    id: number;
+    id: string;
     email: string;
-    name: string;
-    created_at: string;
+    full_name: string;
+    email_verified: boolean;
+    created_at: Date;
 }
 
 // Category types
 export type CategoryType = 'income' | 'expense';
 
 export interface Category {
-    id: number;
+    id: string;
     name: string;
     type: CategoryType;
     icon: string;
-    user_id: number | null;  // null for default categories
-    created_at: string;
+    user_id: string | null;
+    created_at: Date;
 }
 
 export interface CategoryCreate {
     name: string;
     type: CategoryType;
     icon: string;
-    user_id?: number;
+    user_id?: string;
 }
 
 // Transaction types
 export interface Transaction {
-    id: number;
-    user_id: number;
-    category_id: number;
+    id: string;
+    user_id: string;
+    category_id: string;
     amount: number;
     description: string;
     date: string;
     type: CategoryType;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
 }
 
 export interface TransactionCreate {
-    user_id: number;
-    category_id: number;
+    user_id: string;
+    category_id: string;
     amount: number;
     description: string;
     date: string;
@@ -263,7 +387,7 @@ export interface TransactionCreate {
 }
 
 export interface TransactionUpdate {
-    category_id?: number;
+    category_id?: string;
     amount?: number;
     description?: string;
     date?: string;
@@ -283,7 +407,7 @@ export interface MonthlySummary {
 }
 
 export interface CategorySummary {
-    category_id: number;
+    category_id: string;
     category_name: string;
     category_icon: string;
     total: number;
@@ -302,7 +426,7 @@ export interface AuthResponse {
 }
 
 export interface JWTPayload {
-    userId: number;
+    userId: string;
     email: string;
 }
 
@@ -319,214 +443,180 @@ export interface TransactionFilters {
     startDate?: string;
     endDate?: string;
     type?: CategoryType;
-    categoryId?: number;
+    categoryId?: string;
     limit?: number;
     offset?: number;
 }
 ```
 
-### Step 6: Database Configuration
+### Step 8: Sequelize CLI Configuration
 
-Create `src/config/database.ts`:
+Create `.sequelizerc` in backend root:
 
-```typescript
-// ============================================
-// Database Configuration
-// ============================================
+```javascript
+const path = require('path');
 
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
-
-// Ensure data directory exists
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Database path from environment or default
-const dbPath = process.env.DATABASE_PATH || './data/finance.db';
-
-// Create database connection
-const db = new Database(dbPath);
-
-// Enable foreign keys
-db.pragma('foreign_keys = ON');
-
-// Export database instance
-export default db;
-
-// Helper to run migrations
-export function runMigration(sql: string): void {
-    db.exec(sql);
-}
-
-// Close database connection
-export function closeDatabase(): void {
-    db.close();
-}
+module.exports = {
+    'config': path.resolve('db', 'config.js'),
+    'migrations-path': path.resolve('db', 'migrations'),
+    'seeders-path': path.resolve('db', 'seeders'),
+};
 ```
 
-### Step 7: Migration File
+Create `db/config.js`:
 
-Create `migrations/001_initial_schema.sql`:
+```javascript
+require('dotenv').config();
 
-```sql
--- ============================================
--- Initial Database Schema
--- ============================================
-
--- Users table
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    name TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-);
-
--- Create index on email for faster lookups
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-
--- Categories table
-CREATE TABLE IF NOT EXISTS categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
-    icon TEXT DEFAULT '📁',
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    created_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(name, user_id)
-);
-
--- Transactions table
-CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
-    amount REAL NOT NULL CHECK (amount > 0),
-    description TEXT,
-    date TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-);
-
--- Create indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
-CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
-
--- Insert default categories (user_id = NULL means global/default)
-INSERT OR IGNORE INTO categories (name, type, icon, user_id) VALUES
-    -- Income categories
-    ('Salary', 'income', '💼', NULL),
-    ('Freelance', 'income', '💻', NULL),
-    ('Investment', 'income', '📈', NULL),
-    ('Gift', 'income', '🎁', NULL),
-    ('Other Income', 'income', '💰', NULL),
-    
-    -- Expense categories
-    ('Food & Dining', 'expense', '🍔', NULL),
-    ('Transportation', 'expense', '🚗', NULL),
-    ('Shopping', 'expense', '🛒', NULL),
-    ('Entertainment', 'expense', '🎬', NULL),
-    ('Bills & Utilities', 'expense', '📱', NULL),
-    ('Healthcare', 'expense', '🏥', NULL),
-    ('Education', 'expense', '📚', NULL),
-    ('Travel', 'expense', '✈️', NULL),
-    ('Other Expense', 'expense', '💸', NULL);
+module.exports = {
+    development: {
+        username: process.env.DB_USER || 'finance_user',
+        password: process.env.DB_PASSWORD || 'finance_password',
+        database: process.env.DB_NAME || 'finance_tracker',
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        dialect: 'postgres'
+    },
+    production: {
+        username: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        host: process.env.DB_HOST,
+        port: parseInt(process.env.DB_PORT || '5432'),
+        dialect: 'postgres'
+    }
+};
 ```
 
-### Step 8: Migration Runner
+### Step 9: Migration Files
 
-Create `src/config/migrate.ts`:
+Create `db/migrations/001-create-users-table.js`:
 
-```typescript
-// ============================================
-// Database Migration Runner
-// ============================================
+```javascript
+/** @type {import('sequelize-cli').Migration} */
+module.exports = {
+    async up(queryInterface, Sequelize) {
+        // Enable uuid-ossp extension
+        await queryInterface.sequelize.query(`
+            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        `);
 
-import fs from 'fs';
-import path from 'path';
-import db, { runMigration, closeDatabase } from './database';
+        // Create users table
+        await queryInterface.sequelize.query(`
+            CREATE TABLE users (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                full_name VARCHAR(100) NOT NULL,
+                email VARCHAR(100) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                email_verified BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
 
-async function migrate(): Promise<void> {
-    console.log('🚀 Starting database migration...\n');
+        // Create index on email
+        await queryInterface.sequelize.query(`
+            CREATE INDEX idx_users_email ON users(email);
+        `);
+    },
 
-    const migrationsDir = path.join(process.cwd(), 'migrations');
-    
-    // Check if migrations directory exists
-    if (!fs.existsSync(migrationsDir)) {
-        console.error('❌ Migrations directory not found!');
-        process.exit(1);
+    async down(queryInterface, Sequelize) {
+        await queryInterface.sequelize.query(`
+            DROP TABLE IF EXISTS users;
+        `);
     }
-
-    // Get all SQL files sorted by name
-    const migrationFiles = fs.readdirSync(migrationsDir)
-        .filter(file => file.endsWith('.sql'))
-        .sort();
-
-    if (migrationFiles.length === 0) {
-        console.log('📭 No migration files found.');
-        return;
-    }
-
-    // Create migrations tracking table
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS migrations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            executed_at TEXT DEFAULT (datetime('now'))
-        )
-    `);
-
-    // Get already executed migrations
-    const executed = db.prepare('SELECT name FROM migrations').all() as { name: string }[];
-    const executedNames = new Set(executed.map(m => m.name));
-
-    // Run pending migrations
-    for (const file of migrationFiles) {
-        if (executedNames.has(file)) {
-            console.log(`⏭️  Skipping ${file} (already executed)`);
-            continue;
-        }
-
-        console.log(`📝 Running ${file}...`);
-        
-        try {
-            const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
-            runMigration(sql);
-            
-            // Record migration
-            db.prepare('INSERT INTO migrations (name) VALUES (?)').run(file);
-            
-            console.log(`✅ ${file} completed successfully`);
-        } catch (error) {
-            console.error(`❌ Error running ${file}:`, error);
-            process.exit(1);
-        }
-    }
-
-    console.log('\n🎉 All migrations completed!');
-}
-
-// Run migrations
-migrate()
-    .then(() => {
-        closeDatabase();
-        process.exit(0);
-    })
-    .catch((error) => {
-        console.error('Migration failed:', error);
-        closeDatabase();
-        process.exit(1);
-    });
+};
 ```
 
-### Step 9: Basic Express Server
+Create `db/migrations/002-create-categories-table.js`:
+
+```javascript
+/** @type {import('sequelize-cli').Migration} */
+module.exports = {
+    async up(queryInterface, Sequelize) {
+        // Create categories table
+        await queryInterface.sequelize.query(`
+            CREATE TABLE categories (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name VARCHAR(50) NOT NULL,
+                type VARCHAR(10) NOT NULL CHECK (type IN ('income', 'expense')),
+                icon VARCHAR(10) DEFAULT '📁',
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name, user_id)
+            );
+        `);
+
+        // Insert default categories
+        await queryInterface.sequelize.query(`
+            INSERT INTO categories (name, type, icon, user_id) VALUES
+                -- Income categories
+                ('Salary', 'income', '💼', NULL),
+                ('Freelance', 'income', '💻', NULL),
+                ('Investment', 'income', '📈', NULL),
+                ('Gift', 'income', '🎁', NULL),
+                ('Other Income', 'income', '💰', NULL),
+                
+                -- Expense categories
+                ('Food & Dining', 'expense', '🍔', NULL),
+                ('Transportation', 'expense', '🚗', NULL),
+                ('Shopping', 'expense', '🛒', NULL),
+                ('Entertainment', 'expense', '🎬', NULL),
+                ('Bills & Utilities', 'expense', '📱', NULL),
+                ('Healthcare', 'expense', '🏥', NULL),
+                ('Education', 'expense', '📚', NULL),
+                ('Travel', 'expense', '✈️', NULL),
+                ('Other Expense', 'expense', '💸', NULL);
+        `);
+    },
+
+    async down(queryInterface, Sequelize) {
+        await queryInterface.sequelize.query(`
+            DROP TABLE IF EXISTS categories;
+        `);
+    }
+};
+```
+
+Create `db/migrations/003-create-transactions-table.js`:
+
+```javascript
+/** @type {import('sequelize-cli').Migration} */
+module.exports = {
+    async up(queryInterface, Sequelize) {
+        // Create transactions table
+        await queryInterface.sequelize.query(`
+            CREATE TABLE transactions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+                amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+                description TEXT,
+                date DATE NOT NULL,
+                type VARCHAR(10) NOT NULL CHECK (type IN ('income', 'expense')),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Create indexes for common queries
+        await queryInterface.sequelize.query(`
+            CREATE INDEX idx_transactions_user_id ON transactions(user_id);
+            CREATE INDEX idx_transactions_date ON transactions(date);
+            CREATE INDEX idx_transactions_type ON transactions(type);
+            CREATE INDEX idx_transactions_category ON transactions(category_id);
+        `);
+    },
+
+    async down(queryInterface, Sequelize) {
+        await queryInterface.sequelize.query(`
+            DROP TABLE IF EXISTS transactions;
+        `);
+    }
+};
+```
+
+### Step 10: Fastify Server Entry Point
 
 Create `src/index.ts`:
 
@@ -535,115 +625,153 @@ Create `src/index.ts`:
 // Finance Tracker API - Entry Point
 // ============================================
 
-import express, { Express, Request, Response, NextFunction } from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
+import Fastify from 'fastify'
+import cors from '@fastify/cors'
+import swagger from '@fastify/swagger'
+import swaggerUi from '@fastify/swagger-ui'
+import dotenv from 'dotenv'
+import sequelize from './config/database.js'
 
-// Load environment variables
-dotenv.config();
+dotenv.config()
 
-// Import database to initialize it
-import './config/database';
+const app = Fastify({
+    logger: true
+})
 
-// Create Express app
-const app: Express = express();
-const PORT = process.env.PORT || 3000;
+// Register CORS
+await app.register(cors, {
+    origin: true
+})
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Register Swagger documentation
+await app.register(swagger, {
+    openapi: {
+        info: {
+            title: 'Finance Tracker API',
+            description: 'Personal Finance Tracker REST API',
+            version: '1.0.0'
+        },
+        servers: [
+            {
+                url: `http://localhost:${process.env.PORT || 3000}`,
+                description: 'Development server'
+            }
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT'
+                }
+            }
+        }
+    }
+})
 
-// Request logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-    next();
-});
+await app.register(swaggerUi, {
+    routePrefix: '/documentation',
+    uiConfig: {
+        docExpansion: 'list',
+        deepLinking: false
+    }
+})
+
+// Initialize database connection
+try {
+    await sequelize.authenticate()
+    console.log('✅ Database connection established successfully.')
+} catch (error) {
+    console.error('❌ Unable to connect to the database:', error)
+    process.exit(1)
+}
 
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-    res.json({
+app.get('/health', async (request, reply) => {
+    return {
         success: true,
         message: 'Finance Tracker API is running!',
         timestamp: new Date().toISOString()
-    });
-});
+    }
+})
 
 // API info endpoint
-app.get('/api', (req: Request, res: Response) => {
-    res.json({
+app.get('/api', async (request, reply) => {
+    return {
         success: true,
         data: {
             name: 'Finance Tracker API',
             version: '1.0.0',
+            documentation: '/documentation',
             endpoints: {
                 auth: {
-                    register: 'POST /api/auth/register',
-                    login: 'POST /api/auth/login',
-                    profile: 'GET /api/auth/profile'
+                    register: 'POST /api/v1/auth/register',
+                    login: 'POST /api/v1/auth/login',
+                    profile: 'GET /api/v1/auth/profile'
                 },
                 transactions: {
-                    list: 'GET /api/transactions',
-                    create: 'POST /api/transactions',
-                    get: 'GET /api/transactions/:id',
-                    update: 'PUT /api/transactions/:id',
-                    delete: 'DELETE /api/transactions/:id'
+                    list: 'GET /api/v1/transactions',
+                    create: 'POST /api/v1/transactions',
+                    get: 'GET /api/v1/transactions/:id',
+                    update: 'PUT /api/v1/transactions/:id',
+                    delete: 'DELETE /api/v1/transactions/:id'
                 },
                 categories: {
-                    list: 'GET /api/categories',
-                    create: 'POST /api/categories'
+                    list: 'GET /api/v1/categories',
+                    create: 'POST /api/v1/categories'
                 },
                 reports: {
-                    summary: 'GET /api/reports/summary',
-                    monthly: 'GET /api/reports/monthly',
-                    byCategory: 'GET /api/reports/by-category'
+                    summary: 'GET /api/v1/reports/summary',
+                    monthly: 'GET /api/v1/reports/monthly',
+                    byCategory: 'GET /api/v1/reports/by-category'
                 }
             }
         }
-    });
-});
-
-// 404 handler
-app.use((req: Request, res: Response) => {
-    res.status(404).json({
-        success: false,
-        error: 'Endpoint not found'
-    });
-});
-
-// Error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error('Error:', err.message);
-    res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-    });
-});
+    }
+})
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`
-╔════════════════════════════════════════════╗
-║     Finance Tracker API                    ║
-║     Running on http://localhost:${PORT}       ║
-╚════════════════════════════════════════════╝
-    `);
-});
+const PORT = parseInt(process.env.PORT || '3000')
+const HOST = process.env.HOST || '0.0.0.0'
 
-export default app;
+try {
+    await app.listen({ port: PORT, host: HOST })
+    console.log(`
+╔════════════════════════════════════════════════╗
+║     Finance Tracker API                        ║
+║     Running on http://localhost:${PORT}           ║
+║     Docs at http://localhost:${PORT}/documentation ║
+╚════════════════════════════════════════════════╝
+    `)
+} catch (err) {
+    app.log.error(err)
+    process.exit(1)
+}
+
+export default app
 ```
 
-### Step 10: Test the Setup
+### Step 11: Test the Setup
 
 ```bash
-# Run migration
-npm run migrate
+# 1. Start PostgreSQL with Docker
+docker-compose up -d
 
-# Start development server
+# 2. Wait for database to be ready (check with)
+docker-compose logs postgres
+
+# 3. Run migrations
+npm run db:migrate
+
+# 4. Start development server
 npm run dev
 
-# Test endpoints (in another terminal)
+# 5. Test endpoints (in another terminal)
 curl http://localhost:3000/health
 curl http://localhost:3000/api
+
+# 6. Open Swagger documentation
+# Visit: http://localhost:3000/documentation
 ```
 
 ---
@@ -651,40 +779,54 @@ curl http://localhost:3000/api
 ## ✍️ Exercises
 
 ### Exercise 1: Add More Default Categories
-Modify `migrations/001_initial_schema.sql` to add:
+Modify `db/migrations/002-create-categories-table.js` to add:
 - At least 3 more income categories (e.g., Rental Income, Dividends, Bonus)
 - At least 3 more expense categories (e.g., Insurance, Subscriptions, Pets)
 
-### Exercise 2: Create a Reset Migration
-Create `migrations/002_add_notes_column.sql` that:
-- Adds a `notes` column to the transactions table
-- Adds a `color` column to the categories table
-- Make sure it's idempotent (can run multiple times safely)
-
-### Exercise 3: Environment Configuration
+### Exercise 2: Create Environment Validator
 Create a `src/config/env.ts` file that:
-- Validates all required environment variables
+- Validates all required environment variables on startup
 - Provides typed access to configuration
 - Throws helpful errors if required variables are missing
+
+```typescript
+// Example structure
+export const config = {
+    port: validateNumber('PORT', 3000),
+    db: {
+        host: validateString('DB_HOST', 'localhost'),
+        // ... more
+    },
+    jwt: {
+        secret: validateRequired('JWT_SECRET'),
+        // ... more
+    }
+}
+```
+
+### Exercise 3: Add Database Health Check
+Modify the `/health` endpoint to also check database connectivity:
+- Return database status (connected/disconnected)
+- Include response time for database ping
 
 ---
 
 ## ❓ Quiz Questions
 
-### Q1: Why SQLite?
-Why are we using SQLite for this project instead of PostgreSQL or MySQL?
+### Q1: Why Docker for PostgreSQL?
+Why do we use Docker to run PostgreSQL instead of installing it directly on our machine?
 
 **Your Answer**: 
 
 
-### Q2: Foreign Keys
-What does `ON DELETE CASCADE` mean in the foreign key definition?
+### Q2: UUID vs Auto-increment
+Why do we use UUID for primary keys instead of auto-incrementing integers?
 
 **Your Answer**: 
 
 
-### Q3: Database Indexes
-Why do we create indexes on columns like `user_id` and `date` in the transactions table?
+### Q3: Sequelize Raw SQL
+In the LEARNING_MODULE, we use `sequelize.query()` with raw SQL instead of Sequelize models. What are the advantages of this approach?
 
 **Your Answer**: 
 
@@ -693,12 +835,12 @@ Why do we create indexes on columns like `user_id` and `date` in the transaction
 
 ## 📝 Bonus Questions (Optional)
 
-### B1: What is the purpose of the `CHECK` constraint in the schema (e.g., `CHECK (amount > 0)`)?
+### B1: What does `ON DELETE CASCADE` mean in the foreign key definition?
 
 **Your Answer**: 
 
 
-### B2: Why do we use `INSERT OR IGNORE` for the default categories?
+### B2: Why do we create indexes on columns like `user_id` and `date`?
 
 **Your Answer**: 
 
@@ -707,23 +849,24 @@ Why do we create indexes on columns like `user_id` and `date` in the transaction
 
 ## ✅ Day 26 Checklist
 
-- [ ] Understand the project requirements
+- [ ] Understand the project requirements and tech stack
 - [ ] Set up project structure
-- [ ] Configure TypeScript
+- [ ] Configure TypeScript with ES modules
+- [ ] Create Docker Compose for PostgreSQL
+- [ ] Set up environment variables
+- [ ] Configure Sequelize database connection
 - [ ] Create type definitions
-- [ ] Design database schema
-- [ ] Create migration file
-- [ ] Set up database connection
-- [ ] Create migration runner
-- [ ] Set up basic Express server
+- [ ] Create migration files (users, categories, transactions)
+- [ ] Set up Fastify server with CORS and Swagger
 - [ ] Run migrations successfully
 - [ ] Test health endpoint
+- [ ] Access Swagger documentation
 - [ ] Complete Exercise 1 (Categories)
-- [ ] Complete Exercise 2 (Migration)
-- [ ] Complete Exercise 3 (Environment)
+- [ ] Complete Exercise 2 (Environment Validator)
+- [ ] Complete Exercise 3 (Health Check)
 - [ ] Answer all quiz questions
 
 ---
 
 ## 🔗 Next Day Preview
-Tomorrow you'll implement the **Repository Layer** - creating UserRepository, TransactionRepository, and CategoryRepository with all CRUD operations.
+Tomorrow you'll implement the **Repository Layer** - creating UserRepository, TransactionRepository, and CategoryRepository using Sequelize raw SQL queries (matching the LEARNING_MODULE pattern).

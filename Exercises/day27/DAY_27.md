@@ -1,9 +1,10 @@
 # Day 27: Repository Layer (Finance Tracker)
 
 ## 📚 What to Learn Today
-- **Topics**: UserRepository, TransactionRepository, CategoryRepository
+- **Reference**: [LEARNING_MODULE.md](../../Modules/LEARNING_MODULE.md) - Module 5 (Lines 1622-2187)
+- **Topics**: UserRepository, TransactionRepository, CategoryRepository with Sequelize
 - **Time**: ~45 minutes reading, ~45 minutes practice
-- **Goal**: Implement all database operations with TypeScript
+- **Goal**: Implement all database operations using Sequelize raw SQL queries
 
 ---
 
@@ -15,7 +16,7 @@ Repositories encapsulate all database operations for a specific entity.
 ```
 Controller → Service → Repository → Database
                           ↓
-                    SQL Queries
+                    SQL Queries (via Sequelize)
                     Data Mapping
                     Error Handling
 ```
@@ -25,26 +26,43 @@ Controller → Service → Repository → Database
 ```
 Repository Layer:
 ├── CRUD Operations (Create, Read, Update, Delete)
-├── Query Building
+├── SQL Query Execution
 ├── Data Mapping (DB rows → TypeScript objects)
-├── Parameter Validation
+├── Parameter Binding (SQL injection prevention)
 └── Database-specific logic
 ```
 
-### 3. Better-sqlite3 Patterns
+### 3. Sequelize Raw SQL Pattern (from LEARNING_MODULE)
 
 ```typescript
-// Prepared statements (recommended)
-const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
-const user = stmt.get(userId);
+// Using sequelize.query() with replacements
+const [result] = await sequelize.query(`
+    SELECT * FROM users WHERE email = :email
+`, {
+    type: QueryTypes.SELECT,
+    replacements: { email }
+});
 
-// Run for INSERT/UPDATE/DELETE
-const result = db.prepare('INSERT INTO users (name) VALUES (?)').run(name);
-console.log(result.lastInsertRowid);  // Get inserted ID
-
-// All for multiple rows
-const users = db.prepare('SELECT * FROM users').all();
+// Key points:
+// - :placeholder syntax for parameters
+// - replacements object maps values
+// - QueryTypes specifies the query type
+// - Automatic SQL injection prevention
 ```
+
+### 4. Why Raw SQL with Sequelize?
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Sequelize Models** | Less code, auto-mapping | Less control, magic |
+| **Raw SQL** | Full control, explicit | More code |
+| **Raw SQL + Sequelize** | Best of both: control + safety | Slightly more verbose |
+
+We use raw SQL because:
+- You learn actual SQL
+- Full control over queries
+- Easier to optimize
+- Matches the LEARNING_MODULE approach
 
 ---
 
@@ -52,164 +70,181 @@ const users = db.prepare('SELECT * FROM users').all();
 
 ### Step 1: User Repository
 
-Create `src/repositories/userRepository.ts`:
+Create `src/api/v1/repositories/user.repository.ts`:
 
 ```typescript
 // ============================================
 // User Repository - Database Operations
 // ============================================
 
-import db from '../config/database';
-import { User, UserCreate, UserResponse } from '../models/types';
+import { QueryTypes } from 'sequelize'
+import sequelize from '../../../config/database.js'
+import { User, UserCreate, UserResponse } from '../../../types/index.js'
 
-class UserRepository {
+export class UserRepository {
+    /**
+     * Find all users
+     */
+    async findAll(): Promise<UserResponse[]> {
+        const result = await sequelize.query(`
+            SELECT id, email, full_name, email_verified, created_at
+            FROM users
+            ORDER BY created_at DESC
+        `, {
+            type: QueryTypes.SELECT
+        })
+
+        return result as UserResponse[]
+    }
+
     /**
      * Find user by ID
      */
-    findById(id: number): User | null {
-        const stmt = db.prepare(`
-            SELECT id, email, password_hash, name, created_at, updated_at
+    async findById(id: string): Promise<User | null> {
+        const [result] = await sequelize.query(`
+            SELECT id, email, password, full_name, email_verified, created_at, updated_at
             FROM users
-            WHERE id = ?
-        `);
-        
-        const user = stmt.get(id) as User | undefined;
-        return user || null;
+            WHERE id = :id
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { id }
+        })
+
+        return (result as User) || null
     }
 
     /**
      * Find user by email
      */
-    findByEmail(email: string): User | null {
-        const stmt = db.prepare(`
-            SELECT id, email, password_hash, name, created_at, updated_at
+    async findByEmail(email: string): Promise<User | null> {
+        const [result] = await sequelize.query(`
+            SELECT id, email, password, full_name, email_verified, created_at, updated_at
             FROM users
-            WHERE email = ?
-        `);
-        
-        const user = stmt.get(email.toLowerCase()) as User | undefined;
-        return user || null;
+            WHERE email = :email
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { email: email.toLowerCase() }
+        })
+
+        return (result as User) || null
     }
 
     /**
      * Create new user
      */
-    create(userData: UserCreate & { password_hash: string }): User {
-        const stmt = db.prepare(`
-            INSERT INTO users (email, password_hash, name)
-            VALUES (?, ?, ?)
-        `);
+    async create(userData: UserCreate & { password: string }): Promise<User> {
+        const [result] = await sequelize.query(`
+            INSERT INTO users (full_name, email, password, email_verified)
+            VALUES (:full_name, :email, :password, :email_verified)
+            RETURNING *
+        `, {
+            replacements: {
+                full_name: userData.full_name,
+                email: userData.email.toLowerCase(),
+                password: userData.password,
+                email_verified: false
+            }
+        })
 
-        const result = stmt.run(
-            userData.email.toLowerCase(),
-            userData.password_hash,
-            userData.name
-        );
-
-        const newUser = this.findById(result.lastInsertRowid as number);
-        if (!newUser) {
-            throw new Error('Failed to create user');
-        }
-
-        return newUser;
+        return (result as any)[0] as User
     }
 
     /**
      * Update user
      */
-    update(id: number, updates: Partial<Pick<User, 'name' | 'email'>>): User | null {
-        const user = this.findById(id);
-        if (!user) return null;
+    async update(id: string, updates: Partial<Pick<User, 'full_name' | 'email'>>): Promise<User | null> {
+        const fields: string[] = []
+        const replacements: Record<string, any> = { id }
 
-        const fields: string[] = [];
-        const values: any[] = [];
-
-        if (updates.name !== undefined) {
-            fields.push('name = ?');
-            values.push(updates.name);
+        if (updates.full_name !== undefined) {
+            fields.push('full_name = :full_name')
+            replacements.full_name = updates.full_name
         }
 
         if (updates.email !== undefined) {
-            fields.push('email = ?');
-            values.push(updates.email.toLowerCase());
+            fields.push('email = :email')
+            replacements.email = updates.email.toLowerCase()
         }
 
-        if (fields.length === 0) return user;
+        if (fields.length === 0) {
+            return this.findById(id)
+        }
 
-        fields.push('updated_at = datetime("now")');
-        values.push(id);
+        fields.push('updated_at = CURRENT_TIMESTAMP')
 
-        const stmt = db.prepare(`
+        const [result] = await sequelize.query(`
             UPDATE users
             SET ${fields.join(', ')}
-            WHERE id = ?
-        `);
+            WHERE id = :id
+            RETURNING *
+        `, {
+            replacements
+        })
 
-        stmt.run(...values);
-        return this.findById(id);
+        return (result as any)[0] as User || null
     }
 
     /**
      * Update password
      */
-    updatePassword(id: number, passwordHash: string): boolean {
-        const stmt = db.prepare(`
+    async updatePassword(id: string, passwordHash: string): Promise<boolean> {
+        const [, metadata] = await sequelize.query(`
             UPDATE users
-            SET password_hash = ?, updated_at = datetime('now')
-            WHERE id = ?
-        `);
+            SET password = :password, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        `, {
+            replacements: { id, password: passwordHash }
+        })
 
-        const result = stmt.run(passwordHash, id);
-        return result.changes > 0;
+        return (metadata as any).rowCount > 0
+    }
+
+    /**
+     * Update email verification status
+     */
+    async updateEmailVerification(id: string): Promise<boolean> {
+        const [, metadata] = await sequelize.query(`
+            UPDATE users
+            SET email_verified = true, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        `, {
+            replacements: { id }
+        })
+
+        return (metadata as any).rowCount > 0
     }
 
     /**
      * Delete user
      */
-    delete(id: number): boolean {
-        const stmt = db.prepare('DELETE FROM users WHERE id = ?');
-        const result = stmt.run(id);
-        return result.changes > 0;
+    async delete(id: string): Promise<boolean> {
+        const [, metadata] = await sequelize.query(`
+            DELETE FROM users WHERE id = :id
+        `, {
+            replacements: { id }
+        })
+
+        return (metadata as any).rowCount > 0
     }
 
     /**
      * Check if email exists
      */
-    emailExists(email: string, excludeUserId?: number): boolean {
-        let query = 'SELECT COUNT(*) as count FROM users WHERE email = ?';
-        const params: any[] = [email.toLowerCase()];
+    async emailExists(email: string, excludeUserId?: string): Promise<boolean> {
+        let query = 'SELECT COUNT(*) as count FROM users WHERE email = :email'
+        const replacements: Record<string, any> = { email: email.toLowerCase() }
 
         if (excludeUserId) {
-            query += ' AND id != ?';
-            params.push(excludeUserId);
+            query += ' AND id != :excludeUserId'
+            replacements.excludeUserId = excludeUserId
         }
 
-        const stmt = db.prepare(query);
-        const result = stmt.get(...params) as { count: number };
-        return result.count > 0;
-    }
+        const [result] = await sequelize.query(query, {
+            type: QueryTypes.SELECT,
+            replacements
+        })
 
-    /**
-     * Get all users (admin function)
-     */
-    findAll(limit: number = 100, offset: number = 0): UserResponse[] {
-        const stmt = db.prepare(`
-            SELECT id, email, name, created_at
-            FROM users
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-        `);
-
-        return stmt.all(limit, offset) as UserResponse[];
-    }
-
-    /**
-     * Count total users
-     */
-    count(): number {
-        const stmt = db.prepare('SELECT COUNT(*) as count FROM users');
-        const result = stmt.get() as { count: number };
-        return result.count;
+        return parseInt((result as any).count) > 0
     }
 
     /**
@@ -219,245 +254,259 @@ class UserRepository {
         return {
             id: user.id,
             email: user.email,
-            name: user.name,
+            full_name: user.full_name,
+            email_verified: user.email_verified,
             created_at: user.created_at
-        };
+        }
     }
 }
-
-// Export singleton instance
-export default new UserRepository();
 ```
 
 ### Step 2: Category Repository
 
-Create `src/repositories/categoryRepository.ts`:
+Create `src/api/v1/repositories/category.repository.ts`:
 
 ```typescript
 // ============================================
 // Category Repository - Database Operations
 // ============================================
 
-import db from '../config/database';
-import { Category, CategoryCreate, CategoryType } from '../models/types';
+import { QueryTypes } from 'sequelize'
+import sequelize from '../../../config/database.js'
+import { Category, CategoryCreate, CategoryType } from '../../../types/index.js'
 
-class CategoryRepository {
+export class CategoryRepository {
     /**
      * Find category by ID
      */
-    findById(id: number): Category | null {
-        const stmt = db.prepare(`
+    async findById(id: string): Promise<Category | null> {
+        const [result] = await sequelize.query(`
             SELECT id, name, type, icon, user_id, created_at
             FROM categories
-            WHERE id = ?
-        `);
+            WHERE id = :id
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { id }
+        })
 
-        const category = stmt.get(id) as Category | undefined;
-        return category || null;
+        return (result as Category) || null
     }
 
     /**
      * Find all categories for a user (including defaults)
      */
-    findByUserId(userId: number): Category[] {
-        const stmt = db.prepare(`
+    async findByUserId(userId: string): Promise<Category[]> {
+        const result = await sequelize.query(`
             SELECT id, name, type, icon, user_id, created_at
             FROM categories
-            WHERE user_id IS NULL OR user_id = ?
+            WHERE user_id IS NULL OR user_id = :userId
             ORDER BY 
                 CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
                 type,
                 name
-        `);
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { userId }
+        })
 
-        return stmt.all(userId) as Category[];
+        return result as Category[]
     }
 
     /**
      * Find categories by type
      */
-    findByType(userId: number, type: CategoryType): Category[] {
-        const stmt = db.prepare(`
+    async findByType(userId: string, type: CategoryType): Promise<Category[]> {
+        const result = await sequelize.query(`
             SELECT id, name, type, icon, user_id, created_at
             FROM categories
-            WHERE (user_id IS NULL OR user_id = ?)
-              AND type = ?
+            WHERE (user_id IS NULL OR user_id = :userId)
+              AND type = :type
             ORDER BY name
-        `);
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { userId, type }
+        })
 
-        return stmt.all(userId, type) as Category[];
+        return result as Category[]
     }
 
     /**
      * Find default categories only
      */
-    findDefaults(): Category[] {
-        const stmt = db.prepare(`
+    async findDefaults(): Promise<Category[]> {
+        const result = await sequelize.query(`
             SELECT id, name, type, icon, user_id, created_at
             FROM categories
             WHERE user_id IS NULL
             ORDER BY type, name
-        `);
+        `, {
+            type: QueryTypes.SELECT
+        })
 
-        return stmt.all() as Category[];
+        return result as Category[]
     }
 
     /**
      * Find user's custom categories only
      */
-    findCustomByUserId(userId: number): Category[] {
-        const stmt = db.prepare(`
+    async findCustomByUserId(userId: string): Promise<Category[]> {
+        const result = await sequelize.query(`
             SELECT id, name, type, icon, user_id, created_at
             FROM categories
-            WHERE user_id = ?
+            WHERE user_id = :userId
             ORDER BY type, name
-        `);
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { userId }
+        })
 
-        return stmt.all(userId) as Category[];
+        return result as Category[]
     }
 
     /**
      * Create new category
      */
-    create(categoryData: CategoryCreate): Category {
-        const stmt = db.prepare(`
+    async create(categoryData: CategoryCreate): Promise<Category> {
+        const [result] = await sequelize.query(`
             INSERT INTO categories (name, type, icon, user_id)
-            VALUES (?, ?, ?, ?)
-        `);
+            VALUES (:name, :type, :icon, :user_id)
+            RETURNING *
+        `, {
+            replacements: {
+                name: categoryData.name,
+                type: categoryData.type,
+                icon: categoryData.icon || '📁',
+                user_id: categoryData.user_id || null
+            }
+        })
 
-        const result = stmt.run(
-            categoryData.name,
-            categoryData.type,
-            categoryData.icon || '📁',
-            categoryData.user_id || null
-        );
-
-        const newCategory = this.findById(result.lastInsertRowid as number);
-        if (!newCategory) {
-            throw new Error('Failed to create category');
-        }
-
-        return newCategory;
+        return (result as any)[0] as Category
     }
 
     /**
-     * Update category
+     * Update category (only user's own categories)
      */
-    update(id: number, userId: number, updates: Partial<Pick<Category, 'name' | 'icon'>>): Category | null {
-        // Only allow updating user's own categories
-        const category = this.findById(id);
+    async update(id: string, userId: string, updates: Partial<Pick<Category, 'name' | 'icon'>>): Promise<Category | null> {
+        const category = await this.findById(id)
         if (!category || category.user_id !== userId) {
-            return null;
+            return null
         }
 
-        const fields: string[] = [];
-        const values: any[] = [];
+        const fields: string[] = []
+        const replacements: Record<string, any> = { id }
 
         if (updates.name !== undefined) {
-            fields.push('name = ?');
-            values.push(updates.name);
+            fields.push('name = :name')
+            replacements.name = updates.name
         }
 
         if (updates.icon !== undefined) {
-            fields.push('icon = ?');
-            values.push(updates.icon);
+            fields.push('icon = :icon')
+            replacements.icon = updates.icon
         }
 
-        if (fields.length === 0) return category;
+        if (fields.length === 0) {
+            return category
+        }
 
-        values.push(id);
-
-        const stmt = db.prepare(`
+        const [result] = await sequelize.query(`
             UPDATE categories
             SET ${fields.join(', ')}
-            WHERE id = ?
-        `);
+            WHERE id = :id
+            RETURNING *
+        `, {
+            replacements
+        })
 
-        stmt.run(...values);
-        return this.findById(id);
+        return (result as any)[0] as Category || null
     }
 
     /**
      * Delete category (only user's custom categories)
      */
-    delete(id: number, userId: number): boolean {
-        // Check if category belongs to user
-        const category = this.findById(id);
+    async delete(id: string, userId: string): Promise<boolean> {
+        const category = await this.findById(id)
         if (!category || category.user_id !== userId) {
-            return false;
+            return false
         }
 
-        // Check if category is in use
-        const inUse = this.isCategoryInUse(id);
+        const inUse = await this.isCategoryInUse(id)
         if (inUse) {
-            throw new Error('Cannot delete category that has transactions');
+            throw new Error('Cannot delete category that has transactions')
         }
 
-        const stmt = db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?');
-        const result = stmt.run(id, userId);
-        return result.changes > 0;
+        const [, metadata] = await sequelize.query(`
+            DELETE FROM categories WHERE id = :id AND user_id = :userId
+        `, {
+            replacements: { id, userId }
+        })
+
+        return (metadata as any).rowCount > 0
     }
 
     /**
      * Check if category is used in any transactions
      */
-    isCategoryInUse(categoryId: number): boolean {
-        const stmt = db.prepare(`
+    async isCategoryInUse(categoryId: string): Promise<boolean> {
+        const [result] = await sequelize.query(`
             SELECT COUNT(*) as count
             FROM transactions
-            WHERE category_id = ?
-        `);
+            WHERE category_id = :categoryId
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { categoryId }
+        })
 
-        const result = stmt.get(categoryId) as { count: number };
-        return result.count > 0;
+        return parseInt((result as any).count) > 0
     }
 
     /**
      * Check if category name exists for user
      */
-    nameExists(name: string, userId: number, excludeId?: number): boolean {
+    async nameExists(name: string, userId: string, excludeId?: string): Promise<boolean> {
         let query = `
             SELECT COUNT(*) as count
             FROM categories
-            WHERE name = ?
-              AND (user_id IS NULL OR user_id = ?)
-        `;
-        const params: any[] = [name, userId];
+            WHERE name = :name
+              AND (user_id IS NULL OR user_id = :userId)
+        `
+        const replacements: Record<string, any> = { name, userId }
 
         if (excludeId) {
-            query += ' AND id != ?';
-            params.push(excludeId);
+            query += ' AND id != :excludeId'
+            replacements.excludeId = excludeId
         }
 
-        const stmt = db.prepare(query);
-        const result = stmt.get(...params) as { count: number };
-        return result.count > 0;
+        const [result] = await sequelize.query(query, {
+            type: QueryTypes.SELECT,
+            replacements
+        })
+
+        return parseInt((result as any).count) > 0
     }
 
     /**
      * Validate category belongs to user (or is default)
      */
-    validateCategoryAccess(categoryId: number, userId: number): boolean {
-        const category = this.findById(categoryId);
-        if (!category) return false;
-        return category.user_id === null || category.user_id === userId;
+    async validateCategoryAccess(categoryId: string, userId: string): Promise<boolean> {
+        const category = await this.findById(categoryId)
+        if (!category) return false
+        return category.user_id === null || category.user_id === userId
     }
 }
-
-// Export singleton instance
-export default new CategoryRepository();
 ```
 
 ### Step 3: Transaction Repository
 
-Create `src/repositories/transactionRepository.ts`:
+Create `src/api/v1/repositories/transaction.repository.ts`:
 
 ```typescript
 // ============================================
 // Transaction Repository - Database Operations
 // ============================================
 
-import db from '../config/database';
+import { QueryTypes } from 'sequelize'
+import sequelize from '../../../config/database.js'
 import {
     Transaction,
     TransactionCreate,
@@ -466,58 +515,62 @@ import {
     TransactionFilters,
     MonthlySummary,
     CategorySummary
-} from '../models/types';
+} from '../../../types/index.js'
 
-class TransactionRepository {
+export class TransactionRepository {
     /**
      * Find transaction by ID
      */
-    findById(id: number, userId: number): TransactionWithCategory | null {
-        const stmt = db.prepare(`
+    async findById(id: string, userId: string): Promise<TransactionWithCategory | null> {
+        const [result] = await sequelize.query(`
             SELECT 
                 t.id, t.user_id, t.category_id, t.amount, 
                 t.description, t.date, t.type, t.created_at, t.updated_at,
                 c.name as category_name, c.icon as category_icon
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.id = ? AND t.user_id = ?
-        `);
+            WHERE t.id = :id AND t.user_id = :userId
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { id, userId }
+        })
 
-        const transaction = stmt.get(id, userId) as TransactionWithCategory | undefined;
-        return transaction || null;
+        return (result as TransactionWithCategory) || null
     }
 
     /**
      * Find all transactions for a user with filters
      */
-    findByUserId(userId: number, filters: TransactionFilters = {}): TransactionWithCategory[] {
-        const conditions: string[] = ['t.user_id = ?'];
-        const params: any[] = [userId];
+    async findByUserId(userId: string, filters: TransactionFilters = {}): Promise<TransactionWithCategory[]> {
+        const conditions: string[] = ['t.user_id = :userId']
+        const replacements: Record<string, any> = { userId }
 
         if (filters.startDate) {
-            conditions.push('t.date >= ?');
-            params.push(filters.startDate);
+            conditions.push('t.date >= :startDate')
+            replacements.startDate = filters.startDate
         }
 
         if (filters.endDate) {
-            conditions.push('t.date <= ?');
-            params.push(filters.endDate);
+            conditions.push('t.date <= :endDate')
+            replacements.endDate = filters.endDate
         }
 
         if (filters.type) {
-            conditions.push('t.type = ?');
-            params.push(filters.type);
+            conditions.push('t.type = :type')
+            replacements.type = filters.type
         }
 
         if (filters.categoryId) {
-            conditions.push('t.category_id = ?');
-            params.push(filters.categoryId);
+            conditions.push('t.category_id = :categoryId')
+            replacements.categoryId = filters.categoryId
         }
 
-        const limit = filters.limit || 100;
-        const offset = filters.offset || 0;
+        const limit = filters.limit || 100
+        const offset = filters.offset || 0
+        replacements.limit = limit
+        replacements.offset = offset
 
-        const query = `
+        const result = await sequelize.query(`
             SELECT 
                 t.id, t.user_id, t.category_id, t.amount, 
                 t.description, t.date, t.type, t.created_at, t.updated_at,
@@ -526,229 +579,225 @@ class TransactionRepository {
             JOIN categories c ON t.category_id = c.id
             WHERE ${conditions.join(' AND ')}
             ORDER BY t.date DESC, t.created_at DESC
-            LIMIT ? OFFSET ?
-        `;
+            LIMIT :limit OFFSET :offset
+        `, {
+            type: QueryTypes.SELECT,
+            replacements
+        })
 
-        params.push(limit, offset);
-
-        const stmt = db.prepare(query);
-        return stmt.all(...params) as TransactionWithCategory[];
+        return result as TransactionWithCategory[]
     }
 
     /**
      * Create new transaction
      */
-    create(transactionData: TransactionCreate): TransactionWithCategory {
-        const stmt = db.prepare(`
+    async create(transactionData: TransactionCreate): Promise<TransactionWithCategory> {
+        const [result] = await sequelize.query(`
             INSERT INTO transactions (user_id, category_id, amount, description, date, type)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `);
+            VALUES (:user_id, :category_id, :amount, :description, :date, :type)
+            RETURNING *
+        `, {
+            replacements: {
+                user_id: transactionData.user_id,
+                category_id: transactionData.category_id,
+                amount: transactionData.amount,
+                description: transactionData.description || '',
+                date: transactionData.date,
+                type: transactionData.type
+            }
+        })
 
-        const result = stmt.run(
-            transactionData.user_id,
-            transactionData.category_id,
-            transactionData.amount,
-            transactionData.description || '',
-            transactionData.date,
-            transactionData.type
-        );
-
-        const newTransaction = this.findById(
-            result.lastInsertRowid as number,
-            transactionData.user_id
-        );
-
-        if (!newTransaction) {
-            throw new Error('Failed to create transaction');
-        }
-
-        return newTransaction;
+        const transaction = (result as any)[0] as Transaction
+        return this.findById(transaction.id, transaction.user_id) as Promise<TransactionWithCategory>
     }
 
     /**
      * Update transaction
      */
-    update(id: number, userId: number, updates: TransactionUpdate): TransactionWithCategory | null {
-        const transaction = this.findById(id, userId);
-        if (!transaction) return null;
+    async update(id: string, userId: string, updates: TransactionUpdate): Promise<TransactionWithCategory | null> {
+        const transaction = await this.findById(id, userId)
+        if (!transaction) return null
 
-        const fields: string[] = [];
-        const values: any[] = [];
+        const fields: string[] = []
+        const replacements: Record<string, any> = { id, userId }
 
         if (updates.category_id !== undefined) {
-            fields.push('category_id = ?');
-            values.push(updates.category_id);
+            fields.push('category_id = :category_id')
+            replacements.category_id = updates.category_id
         }
 
         if (updates.amount !== undefined) {
-            fields.push('amount = ?');
-            values.push(updates.amount);
+            fields.push('amount = :amount')
+            replacements.amount = updates.amount
         }
 
         if (updates.description !== undefined) {
-            fields.push('description = ?');
-            values.push(updates.description);
+            fields.push('description = :description')
+            replacements.description = updates.description
         }
 
         if (updates.date !== undefined) {
-            fields.push('date = ?');
-            values.push(updates.date);
+            fields.push('date = :date')
+            replacements.date = updates.date
         }
 
-        if (fields.length === 0) return transaction;
+        if (fields.length === 0) {
+            return transaction
+        }
 
-        fields.push('updated_at = datetime("now")');
-        values.push(id, userId);
+        fields.push('updated_at = CURRENT_TIMESTAMP')
 
-        const stmt = db.prepare(`
+        await sequelize.query(`
             UPDATE transactions
             SET ${fields.join(', ')}
-            WHERE id = ? AND user_id = ?
-        `);
+            WHERE id = :id AND user_id = :userId
+        `, {
+            replacements
+        })
 
-        stmt.run(...values);
-        return this.findById(id, userId);
+        return this.findById(id, userId)
     }
 
     /**
      * Delete transaction
      */
-    delete(id: number, userId: number): boolean {
-        const stmt = db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?');
-        const result = stmt.run(id, userId);
-        return result.changes > 0;
+    async delete(id: string, userId: string): Promise<boolean> {
+        const [, metadata] = await sequelize.query(`
+            DELETE FROM transactions WHERE id = :id AND user_id = :userId
+        `, {
+            replacements: { id, userId }
+        })
+
+        return (metadata as any).rowCount > 0
     }
 
     /**
      * Get total count for user
      */
-    countByUserId(userId: number, filters: TransactionFilters = {}): number {
-        const conditions: string[] = ['user_id = ?'];
-        const params: any[] = [userId];
+    async countByUserId(userId: string, filters: TransactionFilters = {}): Promise<number> {
+        const conditions: string[] = ['user_id = :userId']
+        const replacements: Record<string, any> = { userId }
 
         if (filters.startDate) {
-            conditions.push('date >= ?');
-            params.push(filters.startDate);
+            conditions.push('date >= :startDate')
+            replacements.startDate = filters.startDate
         }
 
         if (filters.endDate) {
-            conditions.push('date <= ?');
-            params.push(filters.endDate);
+            conditions.push('date <= :endDate')
+            replacements.endDate = filters.endDate
         }
 
         if (filters.type) {
-            conditions.push('type = ?');
-            params.push(filters.type);
+            conditions.push('type = :type')
+            replacements.type = filters.type
         }
 
-        const stmt = db.prepare(`
+        const [result] = await sequelize.query(`
             SELECT COUNT(*) as count
             FROM transactions
             WHERE ${conditions.join(' AND ')}
-        `);
+        `, {
+            type: QueryTypes.SELECT,
+            replacements
+        })
 
-        const result = stmt.get(...params) as { count: number };
-        return result.count;
+        return parseInt((result as any).count)
     }
 
     /**
      * Get summary (total income, expense, balance)
      */
-    getSummary(userId: number, startDate?: string, endDate?: string): {
+    async getSummary(userId: string, startDate?: string, endDate?: string): Promise<{
         totalIncome: number;
         totalExpense: number;
         balance: number;
         transactionCount: number;
-    } {
-        const conditions: string[] = ['user_id = ?'];
-        const params: any[] = [userId];
+    }> {
+        const conditions: string[] = ['user_id = :userId']
+        const replacements: Record<string, any> = { userId }
 
         if (startDate) {
-            conditions.push('date >= ?');
-            params.push(startDate);
+            conditions.push('date >= :startDate')
+            replacements.startDate = startDate
         }
 
         if (endDate) {
-            conditions.push('date <= ?');
-            params.push(endDate);
+            conditions.push('date <= :endDate')
+            replacements.endDate = endDate
         }
 
-        const stmt = db.prepare(`
+        const [result] = await sequelize.query(`
             SELECT 
                 COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
                 COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
                 COUNT(*) as transaction_count
             FROM transactions
             WHERE ${conditions.join(' AND ')}
-        `);
+        `, {
+            type: QueryTypes.SELECT,
+            replacements
+        })
 
-        const result = stmt.get(...params) as {
-            total_income: number;
-            total_expense: number;
-            transaction_count: number;
-        };
-
+        const row = result as any
         return {
-            totalIncome: result.total_income,
-            totalExpense: result.total_expense,
-            balance: result.total_income - result.total_expense,
-            transactionCount: result.transaction_count
-        };
+            totalIncome: parseFloat(row.total_income),
+            totalExpense: parseFloat(row.total_expense),
+            balance: parseFloat(row.total_income) - parseFloat(row.total_expense),
+            transactionCount: parseInt(row.transaction_count)
+        }
     }
 
     /**
      * Get monthly summary
      */
-    getMonthlySummary(userId: number, months: number = 12): MonthlySummary[] {
-        const stmt = db.prepare(`
+    async getMonthlySummary(userId: string, months: number = 12): Promise<MonthlySummary[]> {
+        const result = await sequelize.query(`
             SELECT 
-                strftime('%Y-%m', date) as month,
+                TO_CHAR(date, 'YYYY-MM') as month,
                 COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
                 COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense
             FROM transactions
-            WHERE user_id = ?
-              AND date >= date('now', '-' || ? || ' months')
-            GROUP BY strftime('%Y-%m', date)
+            WHERE user_id = :userId
+              AND date >= CURRENT_DATE - INTERVAL ':months months'
+            GROUP BY TO_CHAR(date, 'YYYY-MM')
             ORDER BY month DESC
-        `);
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { userId, months }
+        })
 
-        const results = stmt.all(userId, months) as Array<{
-            month: string;
-            total_income: number;
-            total_expense: number;
-        }>;
-
-        return results.map(row => ({
+        return (result as any[]).map(row => ({
             month: row.month,
-            total_income: row.total_income,
-            total_expense: row.total_expense,
-            balance: row.total_income - row.total_expense
-        }));
+            total_income: parseFloat(row.total_income),
+            total_expense: parseFloat(row.total_expense),
+            balance: parseFloat(row.total_income) - parseFloat(row.total_expense)
+        }))
     }
 
     /**
      * Get summary by category
      */
-    getCategorySummary(
-        userId: number,
+    async getCategorySummary(
+        userId: string,
         type: 'income' | 'expense',
         startDate?: string,
         endDate?: string
-    ): CategorySummary[] {
-        const conditions: string[] = ['t.user_id = ?', 't.type = ?'];
-        const params: any[] = [userId, type];
+    ): Promise<CategorySummary[]> {
+        const conditions: string[] = ['t.user_id = :userId', 't.type = :type']
+        const replacements: Record<string, any> = { userId, type }
 
         if (startDate) {
-            conditions.push('t.date >= ?');
-            params.push(startDate);
+            conditions.push('t.date >= :startDate')
+            replacements.startDate = startDate
         }
 
         if (endDate) {
-            conditions.push('t.date <= ?');
-            params.push(endDate);
+            conditions.push('t.date <= :endDate')
+            replacements.endDate = endDate
         }
 
-        const stmt = db.prepare(`
+        const result = await sequelize.query(`
             SELECT 
                 c.id as category_id,
                 c.name as category_name,
@@ -759,60 +808,57 @@ class TransactionRepository {
             WHERE ${conditions.join(' AND ')}
             GROUP BY c.id, c.name, c.icon
             ORDER BY total DESC
-        `);
+        `, {
+            type: QueryTypes.SELECT,
+            replacements
+        })
 
-        const results = stmt.all(...params) as Array<{
-            category_id: number;
-            category_name: string;
-            category_icon: string;
-            total: number;
-        }>;
+        const rows = result as any[]
+        const grandTotal = rows.reduce((sum, row) => sum + parseFloat(row.total), 0)
 
-        // Calculate percentages
-        const grandTotal = results.reduce((sum, row) => sum + row.total, 0);
-
-        return results.map(row => ({
+        return rows.map(row => ({
             category_id: row.category_id,
             category_name: row.category_name,
             category_icon: row.category_icon,
-            total: row.total,
-            percentage: grandTotal > 0 ? (row.total / grandTotal) * 100 : 0
-        }));
+            total: parseFloat(row.total),
+            percentage: grandTotal > 0 ? (parseFloat(row.total) / grandTotal) * 100 : 0
+        }))
     }
 
     /**
      * Get recent transactions
      */
-    getRecent(userId: number, limit: number = 5): TransactionWithCategory[] {
-        return this.findByUserId(userId, { limit });
+    async getRecent(userId: string, limit: number = 5): Promise<TransactionWithCategory[]> {
+        return this.findByUserId(userId, { limit })
     }
 
     /**
      * Delete all transactions for a user
      */
-    deleteAllByUserId(userId: number): number {
-        const stmt = db.prepare('DELETE FROM transactions WHERE user_id = ?');
-        const result = stmt.run(userId);
-        return result.changes;
+    async deleteAllByUserId(userId: string): Promise<number> {
+        const [, metadata] = await sequelize.query(`
+            DELETE FROM transactions WHERE user_id = :userId
+        `, {
+            replacements: { userId }
+        })
+
+        return (metadata as any).rowCount
     }
 }
-
-// Export singleton instance
-export default new TransactionRepository();
 ```
 
 ### Step 4: Repository Index
 
-Create `src/repositories/index.ts`:
+Create `src/api/v1/repositories/index.ts`:
 
 ```typescript
 // ============================================
 // Repository Exports
 // ============================================
 
-export { default as userRepository } from './userRepository';
-export { default as categoryRepository } from './categoryRepository';
-export { default as transactionRepository } from './transactionRepository';
+export { UserRepository } from './user.repository.js'
+export { CategoryRepository } from './category.repository.js'
+export { TransactionRepository } from './transaction.repository.js'
 ```
 
 ### Step 5: Test Repositories
@@ -824,74 +870,83 @@ Create `src/test-repositories.ts` (temporary test file):
 // Test Repositories (Run with: npx ts-node src/test-repositories.ts)
 // ============================================
 
-import dotenv from 'dotenv';
-dotenv.config();
+import dotenv from 'dotenv'
+dotenv.config()
 
-import { userRepository, categoryRepository, transactionRepository } from './repositories';
-import bcrypt from 'bcryptjs';
+import { UserRepository, CategoryRepository, TransactionRepository } from './api/v1/repositories/index.js'
+import bcrypt from 'bcryptjs'
 
 async function testRepositories() {
-    console.log('🧪 Testing Repositories...\n');
+    console.log('🧪 Testing Repositories...\n')
 
-    // Test User Repository
-    console.log('📝 Testing UserRepository...');
-    
-    const passwordHash = await bcrypt.hash('testpassword123', 10);
-    const testUser = userRepository.create({
-        email: 'test@example.com',
-        password: 'testpassword123',
-        name: 'Test User',
-        password_hash: passwordHash
-    });
-    console.log('Created user:', userRepository.toResponse(testUser));
+    const userRepo = new UserRepository()
+    const categoryRepo = new CategoryRepository()
+    const transactionRepo = new TransactionRepository()
 
-    const foundUser = userRepository.findByEmail('test@example.com');
-    console.log('Found by email:', foundUser ? 'Yes' : 'No');
+    try {
+        // Test User Repository
+        console.log('📝 Testing UserRepository...')
+        
+        const passwordHash = await bcrypt.hash('testpassword123', 10)
+        const testUser = await userRepo.create({
+            email: 'test@example.com',
+            password: passwordHash,
+            full_name: 'Test User'
+        })
+        console.log('Created user:', userRepo.toResponse(testUser))
 
-    // Test Category Repository
-    console.log('\n📝 Testing CategoryRepository...');
-    
-    const categories = categoryRepository.findByUserId(testUser.id);
-    console.log(`Found ${categories.length} categories for user`);
+        const foundUser = await userRepo.findByEmail('test@example.com')
+        console.log('Found by email:', foundUser ? 'Yes' : 'No')
 
-    const incomeCategories = categoryRepository.findByType(testUser.id, 'income');
-    console.log(`Found ${incomeCategories.length} income categories`);
+        // Test Category Repository
+        console.log('\n📝 Testing CategoryRepository...')
+        
+        const categories = await categoryRepo.findByUserId(testUser.id)
+        console.log(`Found ${categories.length} categories for user`)
 
-    const customCategory = categoryRepository.create({
-        name: 'Side Hustle',
-        type: 'income',
-        icon: '🚀',
-        user_id: testUser.id
-    });
-    console.log('Created custom category:', customCategory.name);
+        const incomeCategories = await categoryRepo.findByType(testUser.id, 'income')
+        console.log(`Found ${incomeCategories.length} income categories`)
 
-    // Test Transaction Repository
-    console.log('\n📝 Testing TransactionRepository...');
+        const customCategory = await categoryRepo.create({
+            name: 'Side Hustle',
+            type: 'income',
+            icon: '🚀',
+            user_id: testUser.id
+        })
+        console.log('Created custom category:', customCategory.name)
 
-    const transaction = transactionRepository.create({
-        user_id: testUser.id,
-        category_id: categories[0].id,
-        amount: 5000,
-        description: 'Monthly salary',
-        date: new Date().toISOString().split('T')[0],
-        type: 'income'
-    });
-    console.log('Created transaction:', transaction.id);
+        // Test Transaction Repository
+        console.log('\n📝 Testing TransactionRepository...')
 
-    const summary = transactionRepository.getSummary(testUser.id);
-    console.log('Summary:', summary);
+        const transaction = await transactionRepo.create({
+            user_id: testUser.id,
+            category_id: categories[0].id,
+            amount: 5000,
+            description: 'Monthly salary',
+            date: new Date().toISOString().split('T')[0],
+            type: 'income'
+        })
+        console.log('Created transaction:', transaction.id)
 
-    // Cleanup
-    console.log('\n🧹 Cleaning up...');
-    transactionRepository.delete(transaction.id, testUser.id);
-    categoryRepository.delete(customCategory.id, testUser.id);
-    userRepository.delete(testUser.id);
-    console.log('Cleanup complete!');
+        const summary = await transactionRepo.getSummary(testUser.id)
+        console.log('Summary:', summary)
 
-    console.log('\n✅ All repository tests passed!');
+        // Cleanup
+        console.log('\n🧹 Cleaning up...')
+        await transactionRepo.delete(transaction.id, testUser.id)
+        await categoryRepo.delete(customCategory.id, testUser.id)
+        await userRepo.delete(testUser.id)
+        console.log('Cleanup complete!')
+
+        console.log('\n✅ All repository tests passed!')
+    } catch (error) {
+        console.error('❌ Test failed:', error)
+    }
+
+    process.exit(0)
 }
 
-testRepositories().catch(console.error);
+testRepositories()
 ```
 
 ---
@@ -900,9 +955,14 @@ testRepositories().catch(console.error);
 
 ### Exercise 1: Add Search to Transaction Repository
 Add a `search` method to TransactionRepository that:
-- Searches transactions by description
-- Uses SQL LIKE for partial matching
+- Searches transactions by description using SQL `ILIKE`
 - Returns results ordered by relevance (exact match first)
+
+```typescript
+async search(userId: string, query: string): Promise<TransactionWithCategory[]> {
+    // Your implementation here
+}
+```
 
 ### Exercise 2: Add Bulk Operations
 Add these methods to TransactionRepository:
@@ -919,20 +979,20 @@ Add these methods to TransactionRepository:
 
 ## ❓ Quiz Questions
 
-### Q1: Prepared Statements
-Why do we use prepared statements (`db.prepare()`) instead of string concatenation for SQL queries?
+### Q1: Parameterized Queries
+Why do we use `:placeholder` syntax with `replacements` instead of string concatenation for SQL queries?
 
 **Your Answer**: 
 
 
-### Q2: Singleton Pattern
-Why do we export repository instances as singletons (`export default new UserRepository()`)?
+### Q2: QueryTypes
+What is the purpose of `QueryTypes.SELECT` in Sequelize queries? What happens if you omit it?
 
 **Your Answer**: 
 
 
-### Q3: Null Handling
-In the CategoryRepository, why do we check for `user_id IS NULL OR user_id = ?` when finding categories?
+### Q3: RETURNING Clause
+What does `RETURNING *` do in PostgreSQL INSERT/UPDATE statements? Why is it useful?
 
 **Your Answer**: 
 
@@ -941,7 +1001,7 @@ In the CategoryRepository, why do we check for `user_id IS NULL OR user_id = ?` 
 
 ## 📝 Bonus Questions (Optional)
 
-### B1: What is the difference between `stmt.get()` and `stmt.all()` in better-sqlite3?
+### B1: What is the difference between `sequelize.query()` returning `[result]` vs `[result, metadata]`?
 
 **Your Answer**: 
 
@@ -955,10 +1015,11 @@ In the CategoryRepository, why do we check for `user_id IS NULL OR user_id = ?` 
 
 ## ✅ Day 27 Checklist
 
-- [ ] Understand the repository pattern
+- [ ] Understand the repository pattern with Sequelize
 - [ ] Create UserRepository with all methods
 - [ ] Create CategoryRepository with all methods
 - [ ] Create TransactionRepository with all methods
+- [ ] Understand `:placeholder` replacements syntax
 - [ ] Implement filtering and pagination
 - [ ] Implement summary and report methods
 - [ ] Test all repositories
@@ -970,4 +1031,4 @@ In the CategoryRepository, why do we check for `user_id IS NULL OR user_id = ?` 
 ---
 
 ## 🔗 Next Day Preview
-Tomorrow you'll implement the **Service Layer** - AuthService, TransactionService, and ReportService with business logic and validation.
+Tomorrow you'll implement the **Service Layer** - AuthService, TransactionService, and ReportService with business logic, validation, and JWT token handling.

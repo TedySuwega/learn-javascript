@@ -1,9 +1,10 @@
 # Day 28: Service Layer (Finance Tracker)
 
 ## 📚 What to Learn Today
+- **Reference**: [LEARNING_MODULE.md](../../Modules/LEARNING_MODULE.md) - Module 6 (Lines 2188-2921)
 - **Topics**: AuthService, TransactionService, ReportService
 - **Time**: ~45 minutes reading, ~45 minutes practice
-- **Goal**: Implement business logic with validation and monthly reports
+- **Goal**: Implement business logic with validation, JWT tokens, and password hashing
 
 ---
 
@@ -13,12 +14,13 @@
 
 ```
 Service Layer:
-├── Business Logic
+├── Business Logic (rules and validations)
 ├── Input Validation
 ├── Data Transformation
-├── Error Handling
+├── Password Hashing
+├── JWT Token Generation
 ├── Orchestrating Repository Calls
-└── Cross-cutting Concerns (logging, etc.)
+└── Error Handling
 ```
 
 ### 2. Service vs Repository
@@ -28,17 +30,21 @@ Repository                    Service
 ├── Database operations       ├── Business rules
 ├── SQL queries               ├── Validation
 ├── Data mapping              ├── Multiple repo calls
-└── Single entity focus       └── Complex operations
+├── Single entity focus       ├── Complex operations
+└── No business logic         └── Security (hashing, JWT)
 ```
 
 ### 3. Authentication Flow
 
 ```
 Register:
-User Data → Validate → Hash Password → Save → Generate Token → Return
+User Data → Validate → Hash Password → Save to DB → Generate Token → Return
 
 Login:
 Credentials → Find User → Verify Password → Generate Token → Return
+
+Profile:
+Token → Verify Token → Get User → Return (without password)
 ```
 
 ### 4. JWT Token Structure
@@ -48,7 +54,7 @@ Header.Payload.Signature
 
 Payload contains:
 {
-    userId: 123,
+    userId: "uuid-here",
     email: "user@example.com",
     iat: 1234567890,  // Issued at
     exp: 1234567890   // Expires at
@@ -61,16 +67,16 @@ Payload contains:
 
 ### Step 1: Auth Service
 
-Create `src/services/authService.ts`:
+Create `src/api/v1/services/auth.service.ts`:
 
 ```typescript
 // ============================================
 // Auth Service - Authentication Logic
 // ============================================
 
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { userRepository } from '../repositories';
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { UserRepository } from '../repositories/user.repository.js'
 import {
     User,
     UserCreate,
@@ -78,19 +84,21 @@ import {
     LoginCredentials,
     AuthResponse,
     JWTPayload
-} from '../models/types';
+} from '../../../types/index.js'
 
-class AuthService {
-    private readonly JWT_SECRET: string;
-    private readonly JWT_EXPIRES_IN: string;
-    private readonly SALT_ROUNDS = 10;
+export class AuthService {
+    private userRepository: UserRepository
+    private readonly JWT_SECRET: string
+    private readonly JWT_EXPIRES_IN: string
+    private readonly SALT_ROUNDS = 10
 
-    constructor() {
-        this.JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
-        this.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+    constructor(userRepository: UserRepository) {
+        this.userRepository = userRepository
+        this.JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me'
+        this.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
 
         if (this.JWT_SECRET === 'default-secret-change-me') {
-            console.warn('⚠️ Warning: Using default JWT secret. Set JWT_SECRET in production!');
+            console.warn('⚠️ Warning: Using default JWT secret. Set JWT_SECRET in production!')
         }
     }
 
@@ -99,29 +107,30 @@ class AuthService {
      */
     async register(userData: UserCreate): Promise<AuthResponse> {
         // Validate input
-        this.validateRegistration(userData);
+        this.validateRegistrationInput(userData)
 
         // Check if email already exists
-        if (userRepository.emailExists(userData.email)) {
-            throw new Error('Email already registered');
+        const existingUser = await this.userRepository.findByEmail(userData.email)
+        if (existingUser) {
+            throw new Error('Email already registered')
         }
 
         // Hash password
-        const passwordHash = await bcrypt.hash(userData.password, this.SALT_ROUNDS);
+        const hashedPassword = await bcrypt.hash(userData.password, this.SALT_ROUNDS)
 
         // Create user
-        const user = userRepository.create({
+        const user = await this.userRepository.create({
             ...userData,
-            password_hash: passwordHash
-        });
+            password: hashedPassword
+        })
 
         // Generate token
-        const token = this.generateToken(user);
+        const token = this.generateToken(user)
 
         return {
-            user: userRepository.toResponse(user),
+            user: this.userRepository.toResponse(user),
             token
-        };
+        }
     }
 
     /**
@@ -130,98 +139,98 @@ class AuthService {
     async login(credentials: LoginCredentials): Promise<AuthResponse> {
         // Validate input
         if (!credentials.email || !credentials.password) {
-            throw new Error('Email and password are required');
+            throw new Error('Email and password are required')
         }
 
         // Find user
-        const user = userRepository.findByEmail(credentials.email);
+        const user = await this.userRepository.findByEmail(credentials.email)
         if (!user) {
-            throw new Error('Invalid email or password');
+            throw new Error('Invalid email or password')
         }
 
         // Verify password
-        const isValidPassword = await bcrypt.compare(
-            credentials.password,
-            user.password_hash
-        );
-
+        const isValidPassword = await bcrypt.compare(credentials.password, user.password)
         if (!isValidPassword) {
-            throw new Error('Invalid email or password');
+            throw new Error('Invalid email or password')
         }
 
         // Generate token
-        const token = this.generateToken(user);
+        const token = this.generateToken(user)
 
         return {
-            user: userRepository.toResponse(user),
+            user: this.userRepository.toResponse(user),
             token
-        };
+        }
     }
 
     /**
      * Get user profile
      */
-    getProfile(userId: number): UserResponse | null {
-        const user = userRepository.findById(userId);
-        if (!user) return null;
-        return userRepository.toResponse(user);
+    async getProfile(userId: string): Promise<UserResponse> {
+        const user = await this.userRepository.findById(userId)
+        if (!user) {
+            throw new Error('User not found')
+        }
+
+        return this.userRepository.toResponse(user)
     }
 
     /**
      * Update user profile
      */
-    updateProfile(
-        userId: number,
-        updates: { name?: string; email?: string }
-    ): UserResponse | null {
-        // Validate email if provided
-        if (updates.email) {
-            if (!this.isValidEmail(updates.email)) {
-                throw new Error('Invalid email format');
-            }
-            if (userRepository.emailExists(updates.email, userId)) {
-                throw new Error('Email already in use');
+    async updateProfile(userId: string, updates: { full_name?: string; email?: string }): Promise<UserResponse> {
+        // Check if user exists
+        const user = await this.userRepository.findById(userId)
+        if (!user) {
+            throw new Error('User not found')
+        }
+
+        // If updating email, check it's not taken
+        if (updates.email && updates.email !== user.email) {
+            const emailExists = await this.userRepository.emailExists(updates.email, userId)
+            if (emailExists) {
+                throw new Error('Email already in use')
             }
         }
 
-        // Validate name if provided
-        if (updates.name !== undefined && updates.name.trim().length < 2) {
-            throw new Error('Name must be at least 2 characters');
+        // Update user
+        const updatedUser = await this.userRepository.update(userId, updates)
+        if (!updatedUser) {
+            throw new Error('Failed to update profile')
         }
 
-        const user = userRepository.update(userId, updates);
-        if (!user) return null;
-        return userRepository.toResponse(user);
+        return this.userRepository.toResponse(updatedUser)
     }
 
     /**
      * Change password
      */
-    async changePassword(
-        userId: number,
-        currentPassword: string,
-        newPassword: string
-    ): Promise<boolean> {
+    async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+        // Validate new password
+        if (!newPassword || newPassword.length < 8) {
+            throw new Error('New password must be at least 8 characters')
+        }
+
         // Get user
-        const user = userRepository.findById(userId);
+        const user = await this.userRepository.findById(userId)
         if (!user) {
-            throw new Error('User not found');
+            throw new Error('User not found')
         }
 
         // Verify current password
-        const isValid = await bcrypt.compare(currentPassword, user.password_hash);
-        if (!isValid) {
-            throw new Error('Current password is incorrect');
+        const isValidPassword = await bcrypt.compare(currentPassword, user.password)
+        if (!isValidPassword) {
+            throw new Error('Current password is incorrect')
         }
 
-        // Validate new password
-        if (!this.isValidPassword(newPassword)) {
-            throw new Error('New password must be at least 8 characters');
-        }
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS)
 
-        // Hash and update
-        const newHash = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
-        return userRepository.updatePassword(userId, newHash);
+        // Update password
+        const success = await this.userRepository.updatePassword(userId, hashedPassword)
+        if (!success) {
+            throw new Error('Failed to update password')
+        }
     }
 
     /**
@@ -229,10 +238,10 @@ class AuthService {
      */
     verifyToken(token: string): JWTPayload {
         try {
-            const decoded = jwt.verify(token, this.JWT_SECRET) as JWTPayload;
-            return decoded;
+            const decoded = jwt.verify(token, this.JWT_SECRET) as JWTPayload
+            return decoded
         } catch (error) {
-            throw new Error('Invalid or expired token');
+            throw new Error('Invalid or expired token')
         }
     }
 
@@ -243,739 +252,495 @@ class AuthService {
         const payload: JWTPayload = {
             userId: user.id,
             email: user.email
-        };
+        }
 
         return jwt.sign(payload, this.JWT_SECRET, {
             expiresIn: this.JWT_EXPIRES_IN
-        });
+        })
     }
 
     /**
-     * Validate registration data
+     * Validate registration input
      */
-    private validateRegistration(data: UserCreate): void {
-        const errors: string[] = [];
-
-        if (!data.name || data.name.trim().length < 2) {
-            errors.push('Name must be at least 2 characters');
+    private validateRegistrationInput(userData: UserCreate): void {
+        if (!userData.email || !userData.password || !userData.full_name) {
+            throw new Error('Name, email, and password are required')
         }
 
-        if (!data.email || !this.isValidEmail(data.email)) {
-            errors.push('Valid email is required');
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(userData.email)) {
+            throw new Error('Invalid email format')
         }
 
-        if (!data.password || !this.isValidPassword(data.password)) {
-            errors.push('Password must be at least 8 characters');
+        // Validate password strength
+        if (userData.password.length < 8) {
+            throw new Error('Password must be at least 8 characters')
         }
 
-        if (errors.length > 0) {
-            throw new Error(errors.join(', '));
+        // Validate name
+        if (userData.full_name.trim().length < 2) {
+            throw new Error('Name must be at least 2 characters')
         }
-    }
-
-    /**
-     * Validate email format
-     */
-    private isValidEmail(email: string): boolean {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    }
-
-    /**
-     * Validate password strength
-     */
-    private isValidPassword(password: string): boolean {
-        return password.length >= 8;
     }
 }
-
-// Export singleton instance
-export default new AuthService();
 ```
 
 ### Step 2: Transaction Service
 
-Create `src/services/transactionService.ts`:
+Create `src/api/v1/services/transaction.service.ts`:
 
 ```typescript
 // ============================================
 // Transaction Service - Business Logic
 // ============================================
 
-import { transactionRepository, categoryRepository } from '../repositories';
+import { TransactionRepository } from '../repositories/transaction.repository.js'
+import { CategoryRepository } from '../repositories/category.repository.js'
 import {
     TransactionCreate,
     TransactionUpdate,
     TransactionWithCategory,
     TransactionFilters,
     CategoryType
-} from '../models/types';
+} from '../../../types/index.js'
 
-class TransactionService {
-    /**
-     * Create a new transaction
-     */
-    create(
-        userId: number,
-        data: Omit<TransactionCreate, 'user_id'>
-    ): TransactionWithCategory {
-        // Validate input
-        this.validateTransaction(data);
+export class TransactionService {
+    private transactionRepository: TransactionRepository
+    private categoryRepository: CategoryRepository
 
-        // Validate category access
-        if (!categoryRepository.validateCategoryAccess(data.category_id, userId)) {
-            throw new Error('Invalid category');
-        }
-
-        // Get category to determine type
-        const category = categoryRepository.findById(data.category_id);
-        if (!category) {
-            throw new Error('Category not found');
-        }
-
-        // Create transaction
-        return transactionRepository.create({
-            ...data,
-            user_id: userId,
-            type: category.type
-        });
+    constructor(
+        transactionRepository: TransactionRepository,
+        categoryRepository: CategoryRepository
+    ) {
+        this.transactionRepository = transactionRepository
+        this.categoryRepository = categoryRepository
     }
 
     /**
-     * Get transaction by ID
+     * Get all transactions for a user
      */
-    getById(id: number, userId: number): TransactionWithCategory | null {
-        return transactionRepository.findById(id, userId);
-    }
-
-    /**
-     * Get all transactions for user with filters
-     */
-    getAll(userId: number, filters: TransactionFilters = {}): {
+    async getTransactions(userId: string, filters: TransactionFilters = {}): Promise<{
         transactions: TransactionWithCategory[];
         total: number;
         page: number;
-        pageSize: number;
-        totalPages: number;
-    } {
-        const pageSize = filters.limit || 20;
-        const page = Math.floor((filters.offset || 0) / pageSize) + 1;
+        limit: number;
+    }> {
+        const limit = filters.limit || 20
+        const offset = filters.offset || 0
+        const page = Math.floor(offset / limit) + 1
 
-        const transactions = transactionRepository.findByUserId(userId, filters);
-        const total = transactionRepository.countByUserId(userId, filters);
-        const totalPages = Math.ceil(total / pageSize);
+        const [transactions, total] = await Promise.all([
+            this.transactionRepository.findByUserId(userId, { ...filters, limit, offset }),
+            this.transactionRepository.countByUserId(userId, filters)
+        ])
 
         return {
             transactions,
             total,
             page,
-            pageSize,
-            totalPages
-        };
+            limit
+        }
     }
 
     /**
-     * Update transaction
+     * Get single transaction
      */
-    update(
-        id: number,
-        userId: number,
-        updates: TransactionUpdate
-    ): TransactionWithCategory | null {
+    async getTransaction(id: string, userId: string): Promise<TransactionWithCategory> {
+        const transaction = await this.transactionRepository.findById(id, userId)
+        if (!transaction) {
+            throw new Error('Transaction not found')
+        }
+        return transaction
+    }
+
+    /**
+     * Create a new transaction
+     */
+    async createTransaction(userId: string, data: Omit<TransactionCreate, 'user_id'>): Promise<TransactionWithCategory> {
+        // Validate input
+        this.validateTransactionInput(data)
+
+        // Validate category exists and user has access
+        const hasAccess = await this.categoryRepository.validateCategoryAccess(data.category_id, userId)
+        if (!hasAccess) {
+            throw new Error('Invalid category')
+        }
+
+        // Get category to verify type matches
+        const category = await this.categoryRepository.findById(data.category_id)
+        if (category && category.type !== data.type) {
+            throw new Error(`Category type mismatch: expected ${category.type}, got ${data.type}`)
+        }
+
+        // Create transaction
+        return this.transactionRepository.create({
+            ...data,
+            user_id: userId
+        })
+    }
+
+    /**
+     * Update a transaction
+     */
+    async updateTransaction(id: string, userId: string, updates: TransactionUpdate): Promise<TransactionWithCategory> {
         // Check transaction exists
-        const existing = transactionRepository.findById(id, userId);
+        const existing = await this.transactionRepository.findById(id, userId)
         if (!existing) {
-            return null;
+            throw new Error('Transaction not found')
         }
 
-        // Validate updates
-        if (updates.amount !== undefined && updates.amount <= 0) {
-            throw new Error('Amount must be greater than 0');
-        }
-
-        if (updates.date !== undefined && !this.isValidDate(updates.date)) {
-            throw new Error('Invalid date format');
-        }
-
-        // Validate category if changing
-        if (updates.category_id !== undefined) {
-            if (!categoryRepository.validateCategoryAccess(updates.category_id, userId)) {
-                throw new Error('Invalid category');
+        // Validate category if being updated
+        if (updates.category_id) {
+            const hasAccess = await this.categoryRepository.validateCategoryAccess(updates.category_id, userId)
+            if (!hasAccess) {
+                throw new Error('Invalid category')
             }
         }
 
-        return transactionRepository.update(id, userId, updates);
+        // Validate amount if being updated
+        if (updates.amount !== undefined && updates.amount <= 0) {
+            throw new Error('Amount must be greater than 0')
+        }
+
+        // Update transaction
+        const updated = await this.transactionRepository.update(id, userId, updates)
+        if (!updated) {
+            throw new Error('Failed to update transaction')
+        }
+
+        return updated
     }
 
     /**
-     * Delete transaction
+     * Delete a transaction
      */
-    delete(id: number, userId: number): boolean {
-        return transactionRepository.delete(id, userId);
+    async deleteTransaction(id: string, userId: string): Promise<void> {
+        const success = await this.transactionRepository.delete(id, userId)
+        if (!success) {
+            throw new Error('Transaction not found')
+        }
     }
 
     /**
      * Get recent transactions
      */
-    getRecent(userId: number, limit: number = 5): TransactionWithCategory[] {
-        return transactionRepository.getRecent(userId, limit);
+    async getRecentTransactions(userId: string, limit: number = 5): Promise<TransactionWithCategory[]> {
+        return this.transactionRepository.getRecent(userId, limit)
     }
 
     /**
-     * Get transactions by type
+     * Validate transaction input
      */
-    getByType(
-        userId: number,
-        type: CategoryType,
-        filters: TransactionFilters = {}
-    ): TransactionWithCategory[] {
-        return transactionRepository.findByUserId(userId, { ...filters, type });
-    }
-
-    /**
-     * Get transactions for a specific month
-     */
-    getByMonth(userId: number, year: number, month: number): TransactionWithCategory[] {
-        const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
-        const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-
-        return transactionRepository.findByUserId(userId, {
-            startDate,
-            endDate
-        });
-    }
-
-    /**
-     * Bulk create transactions
-     */
-    createMany(
-        userId: number,
-        transactions: Array<Omit<TransactionCreate, 'user_id'>>
-    ): TransactionWithCategory[] {
-        const created: TransactionWithCategory[] = [];
-
-        for (const data of transactions) {
-            try {
-                const transaction = this.create(userId, data);
-                created.push(transaction);
-            } catch (error) {
-                console.error('Failed to create transaction:', error);
-            }
-        }
-
-        return created;
-    }
-
-    /**
-     * Validate transaction data
-     */
-    private validateTransaction(data: Omit<TransactionCreate, 'user_id'>): void {
-        const errors: string[] = [];
-
+    private validateTransactionInput(data: Omit<TransactionCreate, 'user_id'>): void {
         if (!data.category_id) {
-            errors.push('Category is required');
+            throw new Error('Category is required')
         }
 
         if (!data.amount || data.amount <= 0) {
-            errors.push('Amount must be greater than 0');
+            throw new Error('Amount must be greater than 0')
         }
 
-        if (!data.date || !this.isValidDate(data.date)) {
-            errors.push('Valid date is required (YYYY-MM-DD)');
+        if (!data.date) {
+            throw new Error('Date is required')
         }
 
-        if (errors.length > 0) {
-            throw new Error(errors.join(', '));
+        if (!data.type || !['income', 'expense'].includes(data.type)) {
+            throw new Error('Type must be income or expense')
         }
-    }
 
-    /**
-     * Validate date format
-     */
-    private isValidDate(dateString: string): boolean {
-        const regex = /^\d{4}-\d{2}-\d{2}$/;
-        if (!regex.test(dateString)) return false;
-
-        const date = new Date(dateString);
-        return date instanceof Date && !isNaN(date.getTime());
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+        if (!dateRegex.test(data.date)) {
+            throw new Error('Invalid date format. Use YYYY-MM-DD')
+        }
     }
 }
-
-// Export singleton instance
-export default new TransactionService();
 ```
 
 ### Step 3: Report Service
 
-Create `src/services/reportService.ts`:
+Create `src/api/v1/services/report.service.ts`:
 
 ```typescript
 // ============================================
 // Report Service - Financial Reports
 // ============================================
 
-import { transactionRepository, categoryRepository } from '../repositories';
+import { TransactionRepository } from '../repositories/transaction.repository.js'
 import {
     MonthlySummary,
-    CategorySummary,
-    CategoryType
-} from '../models/types';
+    CategorySummary
+} from '../../../types/index.js'
 
-interface DashboardSummary {
-    totalIncome: number;
-    totalExpense: number;
-    balance: number;
-    transactionCount: number;
-    incomeChange: number;
-    expenseChange: number;
-}
+export class ReportService {
+    private transactionRepository: TransactionRepository
 
-interface MonthlyTrend {
-    month: string;
-    income: number;
-    expense: number;
-    balance: number;
-}
-
-interface CategoryBreakdown {
-    income: CategorySummary[];
-    expense: CategorySummary[];
-}
-
-class ReportService {
-    /**
-     * Get dashboard summary
-     */
-    getDashboardSummary(userId: number): DashboardSummary {
-        // Get current month dates
-        const now = new Date();
-        const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-        const currentMonthEnd = now.toISOString().split('T')[0];
-
-        // Get previous month dates
-        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const prevMonthStart = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`;
-        const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
-            .toISOString().split('T')[0];
-
-        // Get current month summary
-        const currentSummary = transactionRepository.getSummary(
-            userId,
-            currentMonthStart,
-            currentMonthEnd
-        );
-
-        // Get previous month summary for comparison
-        const prevSummary = transactionRepository.getSummary(
-            userId,
-            prevMonthStart,
-            prevMonthEnd
-        );
-
-        // Calculate percentage changes
-        const incomeChange = this.calculatePercentageChange(
-            prevSummary.totalIncome,
-            currentSummary.totalIncome
-        );
-
-        const expenseChange = this.calculatePercentageChange(
-            prevSummary.totalExpense,
-            currentSummary.totalExpense
-        );
-
-        return {
-            totalIncome: currentSummary.totalIncome,
-            totalExpense: currentSummary.totalExpense,
-            balance: currentSummary.balance,
-            transactionCount: currentSummary.transactionCount,
-            incomeChange,
-            expenseChange
-        };
+    constructor(transactionRepository: TransactionRepository) {
+        this.transactionRepository = transactionRepository
     }
 
     /**
-     * Get overall summary (all time or date range)
+     * Get dashboard summary
      */
-    getSummary(
-        userId: number,
-        startDate?: string,
-        endDate?: string
-    ): {
+    async getDashboardSummary(userId: string): Promise<{
         totalIncome: number;
         totalExpense: number;
         balance: number;
         transactionCount: number;
-    } {
-        return transactionRepository.getSummary(userId, startDate, endDate);
+        monthlyChange: {
+            income: number;
+            expense: number;
+        };
+    }> {
+        // Get current month dates
+        const now = new Date()
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+            .toISOString().split('T')[0]
+        const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+            .toISOString().split('T')[0]
+
+        // Get last month dates
+        const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+            .toISOString().split('T')[0]
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+            .toISOString().split('T')[0]
+
+        // Get summaries
+        const [currentSummary, lastMonthSummary] = await Promise.all([
+            this.transactionRepository.getSummary(userId, currentMonthStart, currentMonthEnd),
+            this.transactionRepository.getSummary(userId, lastMonthStart, lastMonthEnd)
+        ])
+
+        // Calculate monthly change percentage
+        const incomeChange = lastMonthSummary.totalIncome > 0
+            ? ((currentSummary.totalIncome - lastMonthSummary.totalIncome) / lastMonthSummary.totalIncome) * 100
+            : 0
+
+        const expenseChange = lastMonthSummary.totalExpense > 0
+            ? ((currentSummary.totalExpense - lastMonthSummary.totalExpense) / lastMonthSummary.totalExpense) * 100
+            : 0
+
+        return {
+            ...currentSummary,
+            monthlyChange: {
+                income: Math.round(incomeChange * 100) / 100,
+                expense: Math.round(expenseChange * 100) / 100
+            }
+        }
     }
 
     /**
      * Get monthly trends
      */
-    getMonthlyTrends(userId: number, months: number = 12): MonthlyTrend[] {
-        const monthlySummary = transactionRepository.getMonthlySummary(userId, months);
-
-        return monthlySummary.map(summary => ({
-            month: summary.month,
-            income: summary.total_income,
-            expense: summary.total_expense,
-            balance: summary.balance
-        }));
+    async getMonthlyTrends(userId: string, months: number = 12): Promise<MonthlySummary[]> {
+        return this.transactionRepository.getMonthlySummary(userId, months)
     }
 
     /**
      * Get category breakdown
      */
-    getCategoryBreakdown(
-        userId: number,
-        startDate?: string,
-        endDate?: string
-    ): CategoryBreakdown {
-        const income = transactionRepository.getCategorySummary(
-            userId,
-            'income',
-            startDate,
-            endDate
-        );
+    async getCategoryBreakdown(userId: string, startDate?: string, endDate?: string): Promise<{
+        income: CategorySummary[];
+        expense: CategorySummary[];
+    }> {
+        const [income, expense] = await Promise.all([
+            this.transactionRepository.getCategorySummary(userId, 'income', startDate, endDate),
+            this.transactionRepository.getCategorySummary(userId, 'expense', startDate, endDate)
+        ])
 
-        const expense = transactionRepository.getCategorySummary(
-            userId,
-            'expense',
-            startDate,
-            endDate
-        );
-
-        return { income, expense };
+        return { income, expense }
     }
 
     /**
-     * Get spending by category
+     * Get summary for date range
      */
-    getSpendingByCategory(
-        userId: number,
-        startDate?: string,
-        endDate?: string
-    ): CategorySummary[] {
-        return transactionRepository.getCategorySummary(
-            userId,
-            'expense',
-            startDate,
-            endDate
-        );
-    }
+    async getSummaryByDateRange(userId: string, startDate: string, endDate: string): Promise<{
+        totalIncome: number;
+        totalExpense: number;
+        balance: number;
+        transactionCount: number;
+        averageTransaction: number;
+        largestIncome: number;
+        largestExpense: number;
+    }> {
+        const summary = await this.transactionRepository.getSummary(userId, startDate, endDate)
 
-    /**
-     * Get income by category
-     */
-    getIncomeByCategory(
-        userId: number,
-        startDate?: string,
-        endDate?: string
-    ): CategorySummary[] {
-        return transactionRepository.getCategorySummary(
-            userId,
-            'income',
-            startDate,
-            endDate
-        );
-    }
-
-    /**
-     * Get monthly comparison
-     */
-    getMonthlyComparison(
-        userId: number,
-        year: number,
-        month: number
-    ): {
-        current: { income: number; expense: number; balance: number };
-        previous: { income: number; expense: number; balance: number };
-        changes: { income: number; expense: number; balance: number };
-    } {
-        // Current month
-        const currentStart = `${year}-${String(month).padStart(2, '0')}-01`;
-        const currentEnd = new Date(year, month, 0).toISOString().split('T')[0];
-
-        // Previous month
-        const prevDate = new Date(year, month - 2, 1);
-        const prevStart = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`;
-        const prevEnd = new Date(year, month - 1, 0).toISOString().split('T')[0];
-
-        const currentSummary = transactionRepository.getSummary(userId, currentStart, currentEnd);
-        const prevSummary = transactionRepository.getSummary(userId, prevStart, prevEnd);
+        // Calculate averages
+        const averageTransaction = summary.transactionCount > 0
+            ? (summary.totalIncome + summary.totalExpense) / summary.transactionCount
+            : 0
 
         return {
-            current: {
-                income: currentSummary.totalIncome,
-                expense: currentSummary.totalExpense,
-                balance: currentSummary.balance
-            },
-            previous: {
-                income: prevSummary.totalIncome,
-                expense: prevSummary.totalExpense,
-                balance: prevSummary.balance
-            },
-            changes: {
-                income: this.calculatePercentageChange(prevSummary.totalIncome, currentSummary.totalIncome),
-                expense: this.calculatePercentageChange(prevSummary.totalExpense, currentSummary.totalExpense),
-                balance: this.calculatePercentageChange(prevSummary.balance, currentSummary.balance)
-            }
-        };
-    }
-
-    /**
-     * Get yearly summary
-     */
-    getYearlySummary(userId: number, year: number): {
-        months: MonthlyTrend[];
-        totals: { income: number; expense: number; balance: number };
-        averages: { income: number; expense: number };
-    } {
-        const startDate = `${year}-01-01`;
-        const endDate = `${year}-12-31`;
-
-        const summary = transactionRepository.getSummary(userId, startDate, endDate);
-        const monthlyData = transactionRepository.getMonthlySummary(userId, 12)
-            .filter(m => m.month.startsWith(String(year)));
-
-        const months = monthlyData.map(m => ({
-            month: m.month,
-            income: m.total_income,
-            expense: m.total_expense,
-            balance: m.balance
-        }));
-
-        const monthCount = months.length || 1;
-
-        return {
-            months,
-            totals: {
-                income: summary.totalIncome,
-                expense: summary.totalExpense,
-                balance: summary.balance
-            },
-            averages: {
-                income: summary.totalIncome / monthCount,
-                expense: summary.totalExpense / monthCount
-            }
-        };
-    }
-
-    /**
-     * Get top spending categories
-     */
-    getTopSpendingCategories(
-        userId: number,
-        limit: number = 5,
-        startDate?: string,
-        endDate?: string
-    ): CategorySummary[] {
-        const categories = transactionRepository.getCategorySummary(
-            userId,
-            'expense',
-            startDate,
-            endDate
-        );
-
-        return categories.slice(0, limit);
-    }
-
-    /**
-     * Calculate percentage change
-     */
-    private calculatePercentageChange(oldValue: number, newValue: number): number {
-        if (oldValue === 0) {
-            return newValue > 0 ? 100 : 0;
+            ...summary,
+            averageTransaction: Math.round(averageTransaction * 100) / 100,
+            largestIncome: 0, // TODO: Implement in repository
+            largestExpense: 0 // TODO: Implement in repository
         }
-        return ((newValue - oldValue) / oldValue) * 100;
     }
 }
-
-// Export singleton instance
-export default new ReportService();
 ```
 
 ### Step 4: Category Service
 
-Create `src/services/categoryService.ts`:
+Create `src/api/v1/services/category.service.ts`:
 
 ```typescript
 // ============================================
 // Category Service - Category Management
 // ============================================
 
-import { categoryRepository } from '../repositories';
-import { Category, CategoryCreate, CategoryType } from '../models/types';
+import { CategoryRepository } from '../repositories/category.repository.js'
+import { Category, CategoryCreate, CategoryType } from '../../../types/index.js'
 
-class CategoryService {
-    /**
-     * Get all categories for user
-     */
-    getAll(userId: number): Category[] {
-        return categoryRepository.findByUserId(userId);
+export class CategoryService {
+    private categoryRepository: CategoryRepository
+
+    constructor(categoryRepository: CategoryRepository) {
+        this.categoryRepository = categoryRepository
     }
 
     /**
-     * Get categories by type
+     * Get all categories for a user
      */
-    getByType(userId: number, type: CategoryType): Category[] {
-        return categoryRepository.findByType(userId, type);
-    }
-
-    /**
-     * Get category by ID
-     */
-    getById(id: number, userId: number): Category | null {
-        const category = categoryRepository.findById(id);
-        if (!category) return null;
-
-        // Check access
-        if (category.user_id !== null && category.user_id !== userId) {
-            return null;
+    async getCategories(userId: string, type?: CategoryType): Promise<Category[]> {
+        if (type) {
+            return this.categoryRepository.findByType(userId, type)
         }
-
-        return category;
+        return this.categoryRepository.findByUserId(userId)
     }
 
     /**
-     * Create custom category
+     * Get default categories only
      */
-    create(userId: number, data: Omit<CategoryCreate, 'user_id'>): Category {
-        // Validate input
-        this.validateCategory(data);
-
-        // Check for duplicate name
-        if (categoryRepository.nameExists(data.name, userId)) {
-            throw new Error('Category with this name already exists');
-        }
-
-        return categoryRepository.create({
-            ...data,
-            user_id: userId
-        });
-    }
-
-    /**
-     * Update category
-     */
-    update(
-        id: number,
-        userId: number,
-        updates: { name?: string; icon?: string }
-    ): Category | null {
-        // Validate name if provided
-        if (updates.name !== undefined) {
-            if (updates.name.trim().length < 2) {
-                throw new Error('Category name must be at least 2 characters');
-            }
-            if (categoryRepository.nameExists(updates.name, userId, id)) {
-                throw new Error('Category with this name already exists');
-            }
-        }
-
-        return categoryRepository.update(id, userId, updates);
-    }
-
-    /**
-     * Delete category
-     */
-    delete(id: number, userId: number): boolean {
-        // Check if category is in use
-        if (categoryRepository.isCategoryInUse(id)) {
-            throw new Error('Cannot delete category that has transactions. Please reassign transactions first.');
-        }
-
-        return categoryRepository.delete(id, userId);
-    }
-
-    /**
-     * Get default categories
-     */
-    getDefaults(): Category[] {
-        return categoryRepository.findDefaults();
+    async getDefaultCategories(): Promise<Category[]> {
+        return this.categoryRepository.findDefaults()
     }
 
     /**
      * Get user's custom categories
      */
-    getCustom(userId: number): Category[] {
-        return categoryRepository.findCustomByUserId(userId);
+    async getCustomCategories(userId: string): Promise<Category[]> {
+        return this.categoryRepository.findCustomByUserId(userId)
     }
 
     /**
-     * Validate category data
+     * Create a custom category
      */
-    private validateCategory(data: Omit<CategoryCreate, 'user_id'>): void {
-        const errors: string[] = [];
-
+    async createCategory(userId: string, data: Omit<CategoryCreate, 'user_id'>): Promise<Category> {
+        // Validate input
         if (!data.name || data.name.trim().length < 2) {
-            errors.push('Category name must be at least 2 characters');
+            throw new Error('Category name must be at least 2 characters')
         }
 
         if (!data.type || !['income', 'expense'].includes(data.type)) {
-            errors.push('Category type must be "income" or "expense"');
+            throw new Error('Category type must be income or expense')
         }
 
-        if (errors.length > 0) {
-            throw new Error(errors.join(', '));
+        // Check if name already exists
+        const nameExists = await this.categoryRepository.nameExists(data.name, userId)
+        if (nameExists) {
+            throw new Error('Category name already exists')
+        }
+
+        // Create category
+        return this.categoryRepository.create({
+            ...data,
+            user_id: userId
+        })
+    }
+
+    /**
+     * Update a category
+     */
+    async updateCategory(id: string, userId: string, updates: { name?: string; icon?: string }): Promise<Category> {
+        // Validate name if provided
+        if (updates.name !== undefined) {
+            if (updates.name.trim().length < 2) {
+                throw new Error('Category name must be at least 2 characters')
+            }
+
+            // Check if name already exists (excluding current category)
+            const nameExists = await this.categoryRepository.nameExists(updates.name, userId, id)
+            if (nameExists) {
+                throw new Error('Category name already exists')
+            }
+        }
+
+        const updated = await this.categoryRepository.update(id, userId, updates)
+        if (!updated) {
+            throw new Error('Category not found or cannot be modified')
+        }
+
+        return updated
+    }
+
+    /**
+     * Delete a category
+     */
+    async deleteCategory(id: string, userId: string): Promise<void> {
+        try {
+            const success = await this.categoryRepository.delete(id, userId)
+            if (!success) {
+                throw new Error('Category not found or cannot be deleted')
+            }
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('transactions')) {
+                throw new Error('Cannot delete category that has transactions. Delete or reassign transactions first.')
+            }
+            throw error
         }
     }
 }
-
-// Export singleton instance
-export default new CategoryService();
 ```
 
 ### Step 5: Service Index
 
-Create `src/services/index.ts`:
+Create `src/api/v1/services/index.ts`:
 
 ```typescript
 // ============================================
 // Service Exports
 // ============================================
 
-export { default as authService } from './authService';
-export { default as transactionService } from './transactionService';
-export { default as categoryService } from './categoryService';
-export { default as reportService } from './reportService';
+export { AuthService } from './auth.service.js'
+export { TransactionService } from './transaction.service.js'
+export { ReportService } from './report.service.js'
+export { CategoryService } from './category.service.js'
 ```
 
 ---
 
 ## ✍️ Exercises
 
-### Exercise 1: Add Password Reset
-Add these methods to AuthService:
-- `generateResetToken(email)`: Generate a password reset token
-- `resetPassword(token, newPassword)`: Reset password using token
-- Store reset tokens with expiration (you may need a new table)
+### Exercise 1: Add Email Verification
+Add methods to AuthService for email verification:
+- `sendVerificationEmail(userId)`: Generate and store verification token
+- `verifyEmail(token)`: Verify token and update user's email_verified status
 
-### Exercise 2: Add Budget Service
-Create `src/services/budgetService.ts` that:
-- Allows setting monthly budgets per category
-- Compares actual spending vs budget
-- Returns alerts when approaching/exceeding budget
+### Exercise 2: Add Transaction Validation
+Enhance TransactionService validation:
+- Prevent future dates (more than 1 day ahead)
+- Add maximum amount limit (configurable)
+- Add description length validation (max 500 characters)
 
-### Exercise 3: Add Export Service
-Create `src/services/exportService.ts` that:
-- Exports transactions to CSV format
-- Exports transactions to JSON format
-- Supports date range filtering
+### Exercise 3: Add Report Filters
+Enhance ReportService with additional filters:
+- `getTopCategories(userId, type, limit)`: Get top N categories by total amount
+- `getSpendingByDayOfWeek(userId)`: Analyze spending patterns by day
 
 ---
 
 ## ❓ Quiz Questions
 
 ### Q1: Service vs Repository
-Why do we validate data in the service layer instead of the repository layer?
+Why do we put password hashing in the Service layer instead of the Repository layer?
 
 **Your Answer**: 
 
 
-### Q2: Password Hashing
-Why do we use bcrypt with salt rounds instead of simple hashing like SHA256?
+### Q2: Dependency Injection
+Why do we pass `userRepository` to the `AuthService` constructor instead of creating it inside the service?
 
 **Your Answer**: 
 
@@ -990,12 +755,12 @@ What happens when a JWT token expires? How should the frontend handle this?
 
 ## 📝 Bonus Questions (Optional)
 
-### B1: How would you implement rate limiting for the login endpoint to prevent brute force attacks?
+### B1: Why do we use `bcrypt.compare()` instead of hashing the input password and comparing strings?
 
 **Your Answer**: 
 
 
-### B2: What is the difference between authentication and authorization? Where would each be handled?
+### B2: How would you implement refresh tokens to extend user sessions without requiring re-login?
 
 **Your Answer**: 
 
@@ -1005,18 +770,19 @@ What happens when a JWT token expires? How should the frontend handle this?
 ## ✅ Day 28 Checklist
 
 - [ ] Understand service layer responsibilities
-- [ ] Implement AuthService with registration and login
+- [ ] Create AuthService with register, login, profile methods
 - [ ] Implement password hashing with bcrypt
 - [ ] Implement JWT token generation and verification
-- [ ] Implement TransactionService with validation
-- [ ] Implement ReportService with summaries
-- [ ] Implement CategoryService
-- [ ] Complete Exercise 1 (Password Reset)
-- [ ] Complete Exercise 2 (Budget Service)
-- [ ] Complete Exercise 3 (Export Service)
+- [ ] Create TransactionService with CRUD operations
+- [ ] Create ReportService for financial summaries
+- [ ] Create CategoryService for category management
+- [ ] Understand dependency injection pattern
+- [ ] Complete Exercise 1 (Email Verification)
+- [ ] Complete Exercise 2 (Transaction Validation)
+- [ ] Complete Exercise 3 (Report Filters)
 - [ ] Answer all quiz questions
 
 ---
 
 ## 🔗 Next Day Preview
-Tomorrow you'll implement the **Controller Layer & Routes** - creating all API endpoints and connecting everything together.
+Tomorrow you'll implement the **Controller Layer** - creating Fastify routes and controllers that use these services to handle HTTP requests.

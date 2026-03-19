@@ -465,19 +465,56 @@ async search(query: string): Promise<User[]>
 What is the single responsibility of a repository?
 
 **Your Answer**: 
+A repository should ONLY:
+- Execute database queries
+- Map database results to objects
+- Handle database-specific errors
 
+A repository should NOT:
+- Contain business logic
+- Handle HTTP requests/responses
+- Validate business rules
+- Hash passwords
+
+**✅ Correct!** Excellent and comprehensive answer. You've correctly identified both what a repository should do (database operations only) and what it should NOT do (business logic, HTTP handling, validation, password hashing). This shows clear understanding of the Single Responsibility Principle applied to the repository layer.
 
 ### Q2: Why Not Controllers?
 Why don't we put SQL queries directly in controllers?
 
 **Your Answer**: 
+We don’t put SQL in controllers because:
+- Separation of concerns
+- Maintainability
+- Testability
+- Scalability
+- Clean architecture principles
+- Reusability
 
+so controller is for handle request like receptionist, and reposiroty like worker who talk to database
+
+**✅ Correct!** Great answer with all the key reasons. Your analogy is spot on - the controller is like a receptionist (handles incoming requests, routes them appropriately) while the repository is like a worker who specializes in database communication. This separation makes code easier to test, maintain, and scale.
 
 ### Q3: Return Value
 What does `findById` return if no record is found?
 
 **Your Answer**: 
+Based on this :
+### 6. findById() - Get Single Record
 
+```typescript
+async findById(id: number): Promise<User | null> {
+    const result = await db.query(
+        "SELECT * FROM users WHERE id = $1",
+        [id]
+    );
+    
+    // Return null if not found, or the user
+    return result.rows[0] || null;
+}
+
+it will return null if no record found
+
+**✅ Correct!** The `findById` method returns `null` when no record is found, using the pattern `result.rows[0] || null`. This allows the caller to check for null and handle the "not found" case appropriately.
 
 ---
 
@@ -486,29 +523,146 @@ What does `findById` return if no record is found?
 ### B1: Should a repository validate that an email format is correct? Why or why not?
 
 **Your Answer**: 
+No, a repository should not validate email format because:
+- It breaks separation of concerns
+- Validation belongs in controller/service layer
+- Repository should focus only on database interaction
 
+**✅ Correct!** Email format validation is business logic/input validation, which belongs in the controller or service layer. The repository's job is purely database interaction - it should trust that the data it receives has already been validated.
 
 ### B2: What's the benefit of returning `null` vs throwing an error when a record isn't found?
 
 **Your Answer**: 
+Returning null is better when “not found” is expected and part of normal logic.
+Throwing an error is better when “not found” indicates a problem and should stop execution.
 
+
+**✅ Correct!** Great understanding of when to use each approach. For example, checking if an email exists before registration - null is expected. But fetching a user by ID from a URL parameter - if not found, it is likely an error condition worth throwing.
+
+---
+
+## 📊 Quiz Results: Day 09
+
+| Question | Result | Notes |
+|----------|--------|-------|
+| Q1: Repository Responsibility | ✅ Correct | Comprehensive list of responsibilities and non-responsibilities |
+| Q2: Why Not Controllers | ✅ Correct | Great analogy: receptionist vs worker |
+| Q3: Return Value | ✅ Correct | Correctly identified null return |
+| B1: Email Validation | ✅ Correct | Validation belongs in controller/service |
+| B2: null vs Error | ✅ Correct | Good understanding of when to use each |
+
+**Score: 5/5 (100%)**
+
+---
+
+## 📁 Exercise Review
+
+All exercises completed in `Exercises/day09/exercise/`:
+
+### Exercise 1: Pagination ✅
+- **Location**: `src/repositories/userRepository.ts` (lines 10-34)
+- **Implementation**: `findAll()` accepts `{ filters, page, limit }` options
+- **Returns**: `{ users, total, page, totalPages }` object
+
+### Exercise 2: ProductRepository ✅
+- **Location**: `src/repositories/productRepository.ts`
+- **Methods**: `findAll`, `findById`, `findByCategory`, `count`
+- **Types**: Defined in `src/types/product.ts`
+- **DB Handlers**: Added in `src/database/fakeDb.ts`
+
+### Exercise 3: Search ✅
+- **Location**: `src/repositories/userRepository.ts` (lines 89-92)
+- **Implementation**: Uses `LIKE` query with `%query%` pattern
+- **Note**: Required adding LIKE handler in `fakeDb.ts` with `%` wildcard stripping
+
+---
+
+## 💬 Q&A Session Notes
+
+### Q: Why is `params[0]` used in fakeDb.ts?
+
+**A:** The `db.query()` function signature is `query(sql: string, params: any[] = [])`. The `params` array holds all the values that replace placeholders like `$1`, `$2` in SQL queries. So `params[0]` corresponds to `$1`, `params[1]` to `$2`, etc.
+
+```typescript
+// Example: SELECT * FROM users WHERE id = $1
+// params = [1]
+// params[0] = 1 (the id value)
+```
+
+---
+
+### Q: Why does `search()` return empty results?
+
+**A:** The `fakeDb.ts` needed a specific handler for `LIKE` queries. Additionally, SQL's `%` wildcard doesn't work with JavaScript's `includes()` method - you need to strip the `%` characters first:
+
+```typescript
+// Wrong - includes() treats % as literal character
+const query = params[0]; // "%Alice%"
+users.filter(u => u.name.includes(query)); // Never matches!
+
+// Correct - strip % wildcards first
+const pattern = String(params[0]).replace(/%/g, "").toLowerCase();
+users.filter(u => u.name.toLowerCase().includes(pattern)); // Works!
+```
+
+---
+
+### Q: What's the difference between `find` and `filter`?
+
+**A:** 
+- `find()` returns the **first** matching element (or `undefined` if none found)
+- `filter()` returns **all** matching elements as an array (empty array if none found)
+
+```typescript
+const products = [
+  { id: 1, category: "Electronics" },
+  { id: 2, category: "Electronics" },
+  { id: 3, category: "Books" }
+];
+
+products.find(p => p.category === "Electronics");
+// Returns: { id: 1, category: "Electronics" }
+
+products.filter(p => p.category === "Electronics");
+// Returns: [{ id: 1, ... }, { id: 2, ... }]
+```
+
+---
+
+### Q: Why do product queries return null/undefined?
+
+**A:** Two issues were identified:
+
+1. **Missing handlers**: The `fakeDb.ts` initially had no `if` blocks for product queries - they fell through to `return { rows: [] }`
+
+2. **Order of if statements matters**: Specific queries must come BEFORE generic ones:
+
+```typescript
+// Wrong order - generic catches everything
+if (sql.startsWith("SELECT * FROM products")) { ... }
+if (sql.startsWith("SELECT * FROM products WHERE stock =")) { ... } // Never reached!
+
+// Correct order - specific first
+if (sql.startsWith("SELECT * FROM products WHERE stock =")) { ... }
+if (sql.startsWith("SELECT * FROM products")) { ... } // Fallback
+```
 
 ---
 
 ## ✅ Day 9 Checklist
 
-- [ ] Read Module 5 (Lines 1622-1900)
-- [ ] Understand the repository pattern
-- [ ] Understand repository responsibilities
-- [ ] Understand findAll method
-- [ ] Understand findById method
-- [ ] Understand handling "not found" cases
-- [ ] Type all code examples
-- [ ] Complete Exercise 1 (Pagination)
-- [ ] Complete Exercise 2 (ProductRepository)
-- [ ] Complete Exercise 3 (Search)
-- [ ] Answer all quiz questions
-- [ ] Update Progress.md
+- [x] Read Module 5 (Lines 1622-1900)
+- [x] Understand the repository pattern
+- [x] Understand repository responsibilities
+- [x] Understand findAll method
+- [x] Understand findById method
+- [x] Understand handling "not found" cases
+- [x] Type all code examples
+- [x] Complete Exercise 1 (Pagination)
+- [x] Complete Exercise 2 (ProductRepository)
+- [x] Complete Exercise 3 (Search)
+- [x] Answer all quiz questions
+- [x] Update Progress.md
 
 ---
 

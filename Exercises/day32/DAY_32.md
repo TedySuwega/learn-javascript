@@ -1,9 +1,9 @@
 # Day 32: Dashboard & Layout
 
 ## 📚 What to Learn Today
-- **Topics**: Layout component, dashboard, summary cards
+- **Topics**: Layout component, dashboard, summary cards, recent transactions
 - **Time**: ~45 minutes reading, ~45 minutes practice
-- **Goal**: Build dashboard showing income, expense, and balance
+- **Goal**: Build dashboard showing income, expense, and balance with Tailwind CSS
 
 ---
 
@@ -29,24 +29,34 @@ Dashboard:
 ├── Summary Cards (Income, Expense, Balance)
 ├── Recent Transactions
 ├── Quick Actions
-└── Charts (Preview)
+└── Charts (Preview - built in Day 34)
 ```
 
 ### 3. Data Fetching Pattern
 
 ```typescript
-// Custom hook for data fetching
 function useDashboard() {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [data, setData] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        fetchData()
+    }, [])
 
-    return { data, loading, error, refetch };
+    return { data, loading, error, refetch }
 }
+```
+
+### 4. Responsive Design with Tailwind
+
+```
+Mobile First:
+- Base styles for mobile
+- sm: (640px) - Small tablets
+- md: (768px) - Tablets
+- lg: (1024px) - Laptops
+- xl: (1280px) - Desktops
 ```
 
 ---
@@ -62,52 +72,40 @@ Create `src/api/reports.ts`:
 // Reports API
 // ============================================
 
-import api from './client';
-import { DashboardSummary, CategorySummary, MonthlyTrend } from '../types';
+import api from './client'
+import { DashboardSummary, CategorySummary, MonthlyTrend } from '../types'
 
 export const reportsApi = {
-    // Get dashboard summary
     getDashboard: async (): Promise<DashboardSummary> => {
-        const response = await api.get<DashboardSummary>('/api/reports/dashboard');
+        const response = await api.get<DashboardSummary>('/api/v1/reports/dashboard')
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to fetch dashboard');
+        throw new Error(response.error || 'Failed to fetch dashboard')
     },
 
-    // Get monthly trends
     getMonthlyTrends: async (months: number = 12): Promise<MonthlyTrend[]> => {
-        const response = await api.get<MonthlyTrend[]>('/api/reports/monthly', { months });
+        const response = await api.get<MonthlyTrend[]>('/api/v1/reports/monthly', { months })
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to fetch trends');
+        throw new Error(response.error || 'Failed to fetch trends')
     },
 
-    // Get category breakdown
     getCategoryBreakdown: async (startDate?: string, endDate?: string): Promise<{
-        income: CategorySummary[];
-        expense: CategorySummary[];
+        income: CategorySummary[]
+        expense: CategorySummary[]
     }> => {
         const response = await api.get<{
-            income: CategorySummary[];
-            expense: CategorySummary[];
-        }>('/api/reports/categories', { startDate, endDate });
+            income: CategorySummary[]
+            expense: CategorySummary[]
+        }>('/api/v1/reports/categories', { startDate, endDate })
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to fetch categories');
+        throw new Error(response.error || 'Failed to fetch categories')
     },
-
-    // Get spending by category
-    getSpending: async (startDate?: string, endDate?: string): Promise<CategorySummary[]> => {
-        const response = await api.get<CategorySummary[]>('/api/reports/spending', { startDate, endDate });
-        if (response.success && response.data) {
-            return response.data;
-        }
-        throw new Error(response.error || 'Failed to fetch spending');
-    },
-};
+}
 ```
 
 ### Step 2: Transactions API
@@ -119,86 +117,74 @@ Create `src/api/transactions.ts`:
 // Transactions API
 // ============================================
 
-import api from './client';
-import { Transaction, TransactionCreate } from '../types';
+import api from './client'
+import { Transaction, TransactionCreate } from '../types'
 
 interface TransactionListResponse {
-    transactions: Transaction[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-}
-
-interface TransactionFilters {
-    startDate?: string;
-    endDate?: string;
-    type?: 'income' | 'expense';
-    categoryId?: number;
-    limit?: number;
-    offset?: number;
+    transactions: Transaction[]
+    pagination: {
+        page: number
+        limit: number
+        total: number
+        totalPages: number
+    }
 }
 
 export const transactionsApi = {
-    // Get all transactions
-    getAll: async (filters: TransactionFilters = {}): Promise<TransactionListResponse> => {
-        const response = await api.get<Transaction[]>('/api/transactions', filters);
-        if (response.success) {
+    getAll: async (params?: {
+        page?: number
+        limit?: number
+        startDate?: string
+        endDate?: string
+        type?: 'income' | 'expense'
+        categoryId?: string
+    }): Promise<TransactionListResponse> => {
+        const response = await api.get<Transaction[]>('/api/v1/transactions', params)
+        if (response.success && response.data) {
             return {
-                transactions: response.data || [],
-                total: response.meta?.total || 0,
-                page: response.meta?.page || 1,
-                pageSize: response.meta?.pageSize || 20,
-                totalPages: response.meta?.totalPages || 1,
-            };
+                transactions: response.data,
+                pagination: (response as any).pagination || {
+                    page: 1,
+                    limit: 20,
+                    total: response.data.length,
+                    totalPages: 1
+                }
+            }
         }
-        throw new Error(response.error || 'Failed to fetch transactions');
+        throw new Error(response.error || 'Failed to fetch transactions')
     },
 
-    // Get recent transactions
-    getRecent: async (limit: number = 5): Promise<Transaction[]> => {
-        const response = await api.get<Transaction[]>('/api/transactions/recent', { limit });
+    getById: async (id: string): Promise<Transaction> => {
+        const response = await api.get<Transaction>(`/api/v1/transactions/${id}`)
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to fetch recent transactions');
+        throw new Error(response.error || 'Transaction not found')
     },
 
-    // Get single transaction
-    getById: async (id: number): Promise<Transaction> => {
-        const response = await api.get<Transaction>(`/api/transactions/${id}`);
-        if (response.success && response.data) {
-            return response.data;
-        }
-        throw new Error(response.error || 'Transaction not found');
-    },
-
-    // Create transaction
     create: async (data: TransactionCreate): Promise<Transaction> => {
-        const response = await api.post<Transaction>('/api/transactions', data);
+        const response = await api.post<Transaction>('/api/v1/transactions', data)
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to create transaction');
+        throw new Error(response.error || 'Failed to create transaction')
     },
 
-    // Update transaction
-    update: async (id: number, data: Partial<TransactionCreate>): Promise<Transaction> => {
-        const response = await api.put<Transaction>(`/api/transactions/${id}`, data);
+    update: async (id: string, data: Partial<TransactionCreate>): Promise<Transaction> => {
+        const response = await api.put<Transaction>(`/api/v1/transactions/${id}`, data)
         if (response.success && response.data) {
-            return response.data;
+            return response.data
         }
-        throw new Error(response.error || 'Failed to update transaction');
+        throw new Error(response.error || 'Failed to update transaction')
     },
 
-    // Delete transaction
-    delete: async (id: number): Promise<void> => {
-        const response = await api.delete(`/api/transactions/${id}`);
+    delete: async (id: string): Promise<void> => {
+        const response = await api.delete(`/api/v1/transactions/${id}`)
         if (!response.success) {
-            throw new Error(response.error || 'Failed to delete transaction');
+            throw new Error(response.error || 'Failed to delete transaction')
         }
     },
-};
+}
 ```
 
 ### Step 3: Layout Component
@@ -210,298 +196,138 @@ Create `src/components/Layout.tsx`:
 // Layout Component
 // ============================================
 
-import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import '../styles/Layout.css';
+import { useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 interface LayoutProps {
-    children: React.ReactNode;
+    children: React.ReactNode
 }
 
-function Layout({ children }: LayoutProps) {
-    const { user, logout } = useAuth();
-    const location = useLocation();
-    const navigate = useNavigate();
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+const navigation = [
+    { name: 'Dashboard', path: '/dashboard', icon: '📊' },
+    { name: 'Transactions', path: '/transactions', icon: '💳' },
+    { name: 'Reports', path: '/reports', icon: '📈' },
+]
+
+export function Layout({ children }: LayoutProps) {
+    const [sidebarOpen, setSidebarOpen] = useState(false)
+    const { user, logout } = useAuth()
+    const location = useLocation()
+    const navigate = useNavigate()
 
     const handleLogout = () => {
-        logout();
-        navigate('/login');
-    };
-
-    const navItems = [
-        { path: '/dashboard', icon: '📊', label: 'Dashboard' },
-        { path: '/transactions', icon: '💳', label: 'Transactions' },
-        { path: '/reports', icon: '📈', label: 'Reports' },
-        { path: '/settings', icon: '⚙️', label: 'Settings' },
-    ];
+        logout()
+        navigate('/login')
+    }
 
     return (
-        <div className="layout">
+        <div className="min-h-screen bg-gray-50">
+            {/* Mobile sidebar backdrop */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-gray-600 bg-opacity-50 z-20 lg:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-                <div className="sidebar-header">
-                    <h2>💰 Finance</h2>
-                    <button 
-                        className="sidebar-toggle"
-                        onClick={() => setSidebarOpen(!sidebarOpen)}
-                    >
-                        {sidebarOpen ? '◀' : '▶'}
-                    </button>
-                </div>
+            <aside
+                className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 ${
+                    sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                }`}
+            >
+                <div className="flex flex-col h-full">
+                    {/* Logo */}
+                    <div className="flex items-center h-16 px-6 border-b border-gray-200">
+                        <span className="text-xl font-bold text-primary-600">💰 Finance</span>
+                    </div>
 
-                <nav className="sidebar-nav">
-                    {navItems.map(item => (
-                        <Link
-                            key={item.path}
-                            to={item.path}
-                            className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
-                        >
-                            <span className="nav-icon">{item.icon}</span>
-                            {sidebarOpen && <span className="nav-label">{item.label}</span>}
-                        </Link>
-                    ))}
-                </nav>
+                    {/* Navigation */}
+                    <nav className="flex-1 px-4 py-4 space-y-1">
+                        {navigation.map((item) => {
+                            const isActive = location.pathname === item.path
+                            return (
+                                <Link
+                                    key={item.path}
+                                    to={item.path}
+                                    className={`flex items-center px-4 py-3 rounded-lg transition-colors ${
+                                        isActive
+                                            ? 'bg-primary-50 text-primary-700'
+                                            : 'text-gray-600 hover:bg-gray-100'
+                                    }`}
+                                    onClick={() => setSidebarOpen(false)}
+                                >
+                                    <span className="mr-3">{item.icon}</span>
+                                    <span className="font-medium">{item.name}</span>
+                                </Link>
+                            )
+                        })}
+                    </nav>
 
-                <div className="sidebar-footer">
-                    {sidebarOpen && (
-                        <div className="user-info">
-                            <div className="user-avatar">
-                                {user?.name.charAt(0).toUpperCase()}
+                    {/* User section */}
+                    <div className="p-4 border-t border-gray-200">
+                        <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                <span className="text-primary-600 font-medium">
+                                    {user?.full_name?.charAt(0).toUpperCase()}
+                                </span>
                             </div>
-                            <div className="user-details">
-                                <span className="user-name">{user?.name}</span>
-                                <span className="user-email">{user?.email}</span>
+                            <div className="ml-3 flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                    {user?.full_name}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                             </div>
                         </div>
-                    )}
-                    <button className="logout-button" onClick={handleLogout}>
-                        <span>🚪</span>
-                        {sidebarOpen && <span>Logout</span>}
-                    </button>
+                        <button
+                            onClick={handleLogout}
+                            className="mt-4 w-full btn btn-secondary text-sm"
+                        >
+                            Sign out
+                        </button>
+                    </div>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="main-content">
-                {children}
-            </main>
+            {/* Main content */}
+            <div className="lg:pl-64">
+                {/* Top navbar */}
+                <header className="sticky top-0 z-10 bg-white border-b border-gray-200">
+                    <div className="flex items-center justify-between h-16 px-4 lg:px-8">
+                        <button
+                            className="lg:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
+                            onClick={() => setSidebarOpen(true)}
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+
+                        <div className="flex-1 lg:flex-none" />
+
+                        <div className="flex items-center space-x-4">
+                            <span className="text-sm text-gray-600 hidden sm:block">
+                                {new Date().toLocaleDateString('en-US', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}
+                            </span>
+                        </div>
+                    </div>
+                </header>
+
+                {/* Page content */}
+                <main className="p-4 lg:p-8">{children}</main>
+            </div>
         </div>
-    );
-}
-
-export default Layout;
-```
-
-### Step 4: Layout Styles
-
-Create `src/styles/Layout.css`:
-
-```css
-/* ============================================
-   Layout Styles
-   ============================================ */
-
-.layout {
-    display: flex;
-    min-height: 100vh;
-    background: #f5f7fa;
-}
-
-/* Sidebar */
-.sidebar {
-    width: 250px;
-    background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    transition: width 0.3s ease;
-    position: fixed;
-    height: 100vh;
-    z-index: 100;
-}
-
-.sidebar.closed {
-    width: 70px;
-}
-
-.sidebar-header {
-    padding: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.sidebar-header h2 {
-    margin: 0;
-    font-size: 1.3rem;
-    white-space: nowrap;
-    overflow: hidden;
-}
-
-.sidebar.closed .sidebar-header h2 {
-    display: none;
-}
-
-.sidebar-toggle {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: white;
-    width: 30px;
-    height: 30px;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.sidebar-toggle:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-/* Navigation */
-.sidebar-nav {
-    flex: 1;
-    padding: 20px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
-    color: rgba(255, 255, 255, 0.7);
-    text-decoration: none;
-    border-radius: 8px;
-    transition: all 0.2s;
-}
-
-.nav-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-}
-
-.nav-item.active {
-    background: rgba(52, 152, 219, 0.3);
-    color: white;
-}
-
-.nav-icon {
-    font-size: 1.2rem;
-    width: 24px;
-    text-align: center;
-}
-
-.nav-label {
-    white-space: nowrap;
-}
-
-.sidebar.closed .nav-label {
-    display: none;
-}
-
-/* Sidebar Footer */
-.sidebar-footer {
-    padding: 15px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 15px;
-}
-
-.user-avatar {
-    width: 40px;
-    height: 40px;
-    background: #3498db;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 1.1rem;
-}
-
-.user-details {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.user-name {
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.user-email {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.logout-button {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 10px;
-    background: rgba(231, 76, 60, 0.2);
-    border: none;
-    border-radius: 8px;
-    color: #e74c3c;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.logout-button:hover {
-    background: rgba(231, 76, 60, 0.3);
-}
-
-/* Main Content */
-.main-content {
-    flex: 1;
-    margin-left: 250px;
-    padding: 30px;
-    transition: margin-left 0.3s ease;
-}
-
-.sidebar.closed + .main-content {
-    margin-left: 70px;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .sidebar {
-        width: 70px;
-    }
-    
-    .sidebar .nav-label,
-    .sidebar .user-info,
-    .sidebar-header h2 {
-        display: none;
-    }
-    
-    .main-content {
-        margin-left: 70px;
-    }
+    )
 }
 ```
 
-### Step 5: Summary Card Component
+### Step 4: Summary Card Component
 
 Create `src/components/SummaryCard.tsx`:
 
@@ -510,183 +336,195 @@ Create `src/components/SummaryCard.tsx`:
 // Summary Card Component
 // ============================================
 
-import React from 'react';
-import '../styles/SummaryCard.css';
-
 interface SummaryCardProps {
-    title: string;
-    value: number;
-    icon: string;
-    type: 'income' | 'expense' | 'balance';
-    change?: number;
-    loading?: boolean;
+    title: string
+    value: number
+    change?: number
+    type: 'income' | 'expense' | 'balance'
+    loading?: boolean
 }
 
-function SummaryCard({ title, value, icon, type, change, loading }: SummaryCardProps) {
-    const formatCurrency = (amount: number): string => {
+export function SummaryCard({ title, value, change, type, loading }: SummaryCardProps) {
+    const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-        }).format(amount);
-    };
+        }).format(amount)
+    }
 
-    const getChangeColor = (): string => {
-        if (change === undefined) return '';
-        if (type === 'expense') {
-            return change > 0 ? 'negative' : 'positive';
+    const getColors = () => {
+        switch (type) {
+            case 'income':
+                return {
+                    bg: 'bg-green-50',
+                    text: 'text-green-600',
+                    icon: '📈',
+                }
+            case 'expense':
+                return {
+                    bg: 'bg-red-50',
+                    text: 'text-red-600',
+                    icon: '📉',
+                }
+            case 'balance':
+                return {
+                    bg: 'bg-blue-50',
+                    text: 'text-blue-600',
+                    icon: '💰',
+                }
         }
-        return change > 0 ? 'positive' : 'negative';
-    };
+    }
+
+    const colors = getColors()
 
     if (loading) {
         return (
-            <div className={`summary-card ${type} loading`}>
-                <div className="card-skeleton"></div>
+            <div className="card animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-24 mb-4"></div>
+                <div className="h-8 bg-gray-200 rounded w-32"></div>
             </div>
-        );
+        )
     }
 
     return (
-        <div className={`summary-card ${type}`}>
-            <div className="card-icon">{icon}</div>
-            <div className="card-content">
-                <h3 className="card-title">{title}</h3>
-                <p className="card-value">{formatCurrency(value)}</p>
-                {change !== undefined && (
-                    <span className={`card-change ${getChangeColor()}`}>
-                        {change > 0 ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
-                        <span className="change-label">vs last month</span>
-                    </span>
-                )}
+        <div className="card">
+            <div className="flex items-center justify-between">
+                <div>
+                    <p className="text-sm font-medium text-gray-500">{title}</p>
+                    <p className={`text-2xl font-bold mt-1 ${colors.text}`}>
+                        {formatCurrency(value)}
+                    </p>
+                    {change !== undefined && (
+                        <p className={`text-sm mt-2 ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(1)}% from last month
+                        </p>
+                    )}
+                </div>
+                <div className={`w-12 h-12 rounded-full ${colors.bg} flex items-center justify-center`}>
+                    <span className="text-2xl">{colors.icon}</span>
+                </div>
             </div>
         </div>
-    );
-}
-
-export default SummaryCard;
-```
-
-### Step 6: Summary Card Styles
-
-Create `src/styles/SummaryCard.css`:
-
-```css
-/* ============================================
-   Summary Card Styles
-   ============================================ */
-
-.summary-card {
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    display: flex;
-    align-items: flex-start;
-    gap: 20px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.summary-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-}
-
-.card-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.8rem;
-}
-
-.summary-card.income .card-icon {
-    background: rgba(46, 204, 113, 0.15);
-}
-
-.summary-card.expense .card-icon {
-    background: rgba(231, 76, 60, 0.15);
-}
-
-.summary-card.balance .card-icon {
-    background: rgba(52, 152, 219, 0.15);
-}
-
-.card-content {
-    flex: 1;
-}
-
-.card-title {
-    margin: 0 0 8px 0;
-    font-size: 0.9rem;
-    color: #666;
-    font-weight: 500;
-}
-
-.card-value {
-    margin: 0 0 8px 0;
-    font-size: 1.8rem;
-    font-weight: 700;
-}
-
-.summary-card.income .card-value {
-    color: #2ecc71;
-}
-
-.summary-card.expense .card-value {
-    color: #e74c3c;
-}
-
-.summary-card.balance .card-value {
-    color: #3498db;
-}
-
-.card-change {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.card-change.positive {
-    color: #2ecc71;
-}
-
-.card-change.negative {
-    color: #e74c3c;
-}
-
-.change-label {
-    font-weight: 400;
-    color: #999;
-    margin-left: 5px;
-}
-
-/* Loading State */
-.summary-card.loading {
-    min-height: 120px;
-}
-
-.card-skeleton {
-    width: 100%;
-    height: 80px;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: 8px;
-}
-
-@keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    )
 }
 ```
 
-### Step 7: Dashboard Page
+### Step 5: Recent Transactions Component
+
+Create `src/components/RecentTransactions.tsx`:
+
+```tsx
+// ============================================
+// Recent Transactions Component
+// ============================================
+
+import { Link } from 'react-router-dom'
+import { Transaction } from '../types'
+
+interface RecentTransactionsProps {
+    transactions: Transaction[]
+    loading?: boolean
+}
+
+export function RecentTransactions({ transactions, loading }: RecentTransactionsProps) {
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+        }).format(amount)
+    }
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+        })
+    }
+
+    if (loading) {
+        return (
+            <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">Recent Transactions</h3>
+                </div>
+                <div className="space-y-4">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="animate-pulse flex items-center">
+                            <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                            <div className="ml-4 flex-1">
+                                <div className="h-4 bg-gray-200 rounded w-32"></div>
+                                <div className="h-3 bg-gray-200 rounded w-24 mt-2"></div>
+                            </div>
+                            <div className="h-4 bg-gray-200 rounded w-20"></div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="card">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Recent Transactions</h3>
+                <Link
+                    to="/transactions"
+                    className="text-sm text-primary-600 hover:text-primary-700"
+                >
+                    View all →
+                </Link>
+            </div>
+
+            {transactions.length === 0 ? (
+                <div className="text-center py-8">
+                    <p className="text-gray-500">No transactions yet</p>
+                    <Link
+                        to="/transactions"
+                        className="btn btn-primary mt-4 inline-block"
+                    >
+                        Add your first transaction
+                    </Link>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {transactions.map((transaction) => (
+                        <div
+                            key={transaction.id}
+                            className="flex items-center p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                                <span>{transaction.category_icon}</span>
+                            </div>
+                            <div className="ml-4 flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 truncate">
+                                    {transaction.description || transaction.category_name}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                    {transaction.category_name} • {formatDate(transaction.date)}
+                                </p>
+                            </div>
+                            <p
+                                className={`font-semibold ${
+                                    transaction.type === 'income'
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                }`}
+                            >
+                                {transaction.type === 'income' ? '+' : '-'}
+                                {formatCurrency(transaction.amount)}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+```
+
+### Step 6: Dashboard Page
 
 Create `src/pages/Dashboard.tsx`:
 
@@ -695,447 +533,249 @@ Create `src/pages/Dashboard.tsx`:
 // Dashboard Page
 // ============================================
 
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import Layout from '../components/Layout';
-import SummaryCard from '../components/SummaryCard';
-import { reportsApi } from '../api/reports';
-import { transactionsApi } from '../api/transactions';
-import { DashboardSummary, Transaction } from '../types';
-import '../styles/Dashboard.css';
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Layout } from '../components/Layout'
+import { SummaryCard } from '../components/SummaryCard'
+import { RecentTransactions } from '../components/RecentTransactions'
+import { reportsApi } from '../api/reports'
+import { transactionsApi } from '../api/transactions'
+import { DashboardSummary, Transaction } from '../types'
 
-function Dashboard() {
-    const { user } = useAuth();
-    const [summary, setSummary] = useState<DashboardSummary | null>(null);
-    const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+export function Dashboard() {
+    const [summary, setSummary] = useState<DashboardSummary | null>(null)
+    const [transactions, setTransactions] = useState<Transaction[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        fetchDashboardData();
-    }, []);
+        fetchDashboardData()
+    }, [])
 
     const fetchDashboardData = async () => {
         try {
-            setLoading(true);
-            setError(null);
+            setLoading(true)
+            setError(null)
 
             const [summaryData, transactionsData] = await Promise.all([
                 reportsApi.getDashboard(),
-                transactionsApi.getRecent(5),
-            ]);
+                transactionsApi.getAll({ limit: 5 })
+            ])
 
-            setSummary(summaryData);
-            setRecentTransactions(transactionsData);
+            setSummary(summaryData)
+            setTransactions(transactionsData.transactions)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+            setError(err instanceof Error ? err.message : 'Failed to load dashboard')
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
-
-    const formatCurrency = (amount: number): string => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-        }).format(amount);
-    };
-
-    const formatDate = (dateString: string): string => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-        });
-    };
+    }
 
     return (
         <Layout>
-            <div className="dashboard">
+            <div className="space-y-6">
                 {/* Header */}
-                <div className="dashboard-header">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1>Welcome back, {user?.name.split(' ')[0]}!</h1>
-                        <p>Here's your financial overview for this month</p>
+                        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+                        <p className="text-gray-500 mt-1">
+                            Overview of your finances this month
+                        </p>
                     </div>
-                    <Link to="/transactions/new" className="add-transaction-btn">
+                    <Link
+                        to="/transactions"
+                        className="btn btn-primary mt-4 sm:mt-0"
+                    >
                         + Add Transaction
                     </Link>
                 </div>
 
-                {/* Error State */}
+                {/* Error message */}
                 {error && (
-                    <div className="dashboard-error">
-                        <p>{error}</p>
-                        <button onClick={fetchDashboardData}>Retry</button>
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                        {error}
+                        <button
+                            onClick={fetchDashboardData}
+                            className="ml-4 underline hover:no-underline"
+                        >
+                            Retry
+                        </button>
                     </div>
                 )}
 
                 {/* Summary Cards */}
-                <div className="summary-cards">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
                     <SummaryCard
                         title="Total Income"
                         value={summary?.totalIncome || 0}
-                        icon="💰"
+                        change={summary?.monthlyChange.income}
                         type="income"
-                        change={summary?.incomeChange}
                         loading={loading}
                     />
                     <SummaryCard
                         title="Total Expenses"
                         value={summary?.totalExpense || 0}
-                        icon="💸"
+                        change={summary?.monthlyChange.expense}
                         type="expense"
-                        change={summary?.expenseChange}
                         loading={loading}
                     />
                     <SummaryCard
                         title="Balance"
                         value={summary?.balance || 0}
-                        icon="📊"
                         type="balance"
                         loading={loading}
                     />
                 </div>
 
-                {/* Recent Transactions */}
-                <div className="dashboard-section">
-                    <div className="section-header">
-                        <h2>Recent Transactions</h2>
-                        <Link to="/transactions" className="view-all">
-                            View All →
-                        </Link>
-                    </div>
+                {/* Content Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Recent Transactions */}
+                    <RecentTransactions
+                        transactions={transactions}
+                        loading={loading}
+                    />
 
-                    {loading ? (
-                        <div className="transactions-loading">
-                            {[1, 2, 3].map(i => (
-                                <div key={i} className="transaction-skeleton"></div>
-                            ))}
+                    {/* Quick Actions */}
+                    <div className="card">
+                        <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Link
+                                to="/transactions?type=income"
+                                className="p-4 rounded-lg bg-green-50 hover:bg-green-100 transition-colors text-center"
+                            >
+                                <span className="text-2xl">💰</span>
+                                <p className="mt-2 font-medium text-green-700">Add Income</p>
+                            </Link>
+                            <Link
+                                to="/transactions?type=expense"
+                                className="p-4 rounded-lg bg-red-50 hover:bg-red-100 transition-colors text-center"
+                            >
+                                <span className="text-2xl">💸</span>
+                                <p className="mt-2 font-medium text-red-700">Add Expense</p>
+                            </Link>
+                            <Link
+                                to="/reports"
+                                className="p-4 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors text-center"
+                            >
+                                <span className="text-2xl">📊</span>
+                                <p className="mt-2 font-medium text-blue-700">View Reports</p>
+                            </Link>
+                            <Link
+                                to="/transactions"
+                                className="p-4 rounded-lg bg-purple-50 hover:bg-purple-100 transition-colors text-center"
+                            >
+                                <span className="text-2xl">📋</span>
+                                <p className="mt-2 font-medium text-purple-700">All Transactions</p>
+                            </Link>
                         </div>
-                    ) : recentTransactions.length === 0 ? (
-                        <div className="empty-state">
-                            <p>No transactions yet</p>
-                            <Link to="/transactions/new">Add your first transaction</Link>
-                        </div>
-                    ) : (
-                        <div className="transactions-list">
-                            {recentTransactions.map(transaction => (
-                                <div key={transaction.id} className="transaction-item">
-                                    <div className="transaction-icon">
-                                        {transaction.category_icon}
-                                    </div>
-                                    <div className="transaction-details">
-                                        <span className="transaction-category">
-                                            {transaction.category_name}
-                                        </span>
-                                        <span className="transaction-description">
-                                            {transaction.description || 'No description'}
-                                        </span>
-                                    </div>
-                                    <div className="transaction-meta">
-                                        <span className={`transaction-amount ${transaction.type}`}>
-                                            {transaction.type === 'income' ? '+' : '-'}
-                                            {formatCurrency(transaction.amount)}
-                                        </span>
-                                        <span className="transaction-date">
-                                            {formatDate(transaction.date)}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Quick Actions */}
-                <div className="dashboard-section">
-                    <h2>Quick Actions</h2>
-                    <div className="quick-actions">
-                        <Link to="/transactions/new?type=income" className="quick-action income">
-                            <span className="action-icon">💰</span>
-                            <span>Add Income</span>
-                        </Link>
-                        <Link to="/transactions/new?type=expense" className="quick-action expense">
-                            <span className="action-icon">💸</span>
-                            <span>Add Expense</span>
-                        </Link>
-                        <Link to="/reports" className="quick-action reports">
-                            <span className="action-icon">📈</span>
-                            <span>View Reports</span>
-                        </Link>
                     </div>
                 </div>
+
+                {/* Stats */}
+                {summary && (
+                    <div className="card">
+                        <h3 className="text-lg font-semibold mb-4">This Month's Stats</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <p className="text-3xl font-bold text-gray-900">
+                                    {summary.transactionCount}
+                                </p>
+                                <p className="text-sm text-gray-500 mt-1">Transactions</p>
+                            </div>
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <p className="text-3xl font-bold text-green-600">
+                                    {summary.monthlyChange.income >= 0 ? '+' : ''}
+                                    {summary.monthlyChange.income.toFixed(0)}%
+                                </p>
+                                <p className="text-sm text-gray-500 mt-1">Income Change</p>
+                            </div>
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <p className="text-3xl font-bold text-red-600">
+                                    {summary.monthlyChange.expense >= 0 ? '+' : ''}
+                                    {summary.monthlyChange.expense.toFixed(0)}%
+                                </p>
+                                <p className="text-sm text-gray-500 mt-1">Expense Change</p>
+                            </div>
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <p className="text-3xl font-bold text-blue-600">
+                                    {summary.totalIncome > 0
+                                        ? ((summary.totalExpense / summary.totalIncome) * 100).toFixed(0)
+                                        : 0}%
+                                </p>
+                                <p className="text-sm text-gray-500 mt-1">Savings Rate</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </Layout>
-    );
+    )
 }
-
-export default Dashboard;
 ```
 
-### Step 8: Dashboard Styles
+### Step 7: Update App Routes
 
-Create `src/styles/Dashboard.css`:
+Update `src/App.tsx`:
 
-```css
-/* ============================================
-   Dashboard Styles
-   ============================================ */
+```tsx
+// ============================================
+// App Component
+// ============================================
 
-.dashboard {
-    max-width: 1200px;
-    margin: 0 auto;
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { Login } from './pages/Login'
+import { Register } from './pages/Register'
+import { Dashboard } from './pages/Dashboard'
+
+function Transactions() {
+    return <div className="p-8"><h1>Transactions - Coming tomorrow!</h1></div>
 }
 
-.dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 30px;
+function Reports() {
+    return <div className="p-8"><h1>Reports - Coming in Day 34!</h1></div>
 }
 
-.dashboard-header h1 {
-    margin: 0 0 5px 0;
-    color: #333;
+function App() {
+    return (
+        <BrowserRouter>
+            <AuthProvider>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <ProtectedRoute>
+                                <Dashboard />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/transactions"
+                        element={
+                            <ProtectedRoute>
+                                <Transactions />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/reports"
+                        element={
+                            <ProtectedRoute>
+                                <Reports />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+            </AuthProvider>
+        </BrowserRouter>
+    )
 }
 
-.dashboard-header p {
-    margin: 0;
-    color: #666;
-}
-
-.add-transaction-btn {
-    padding: 12px 24px;
-    background: #3498db;
-    color: white;
-    text-decoration: none;
-    border-radius: 8px;
-    font-weight: 600;
-    transition: background 0.2s;
-}
-
-.add-transaction-btn:hover {
-    background: #2980b9;
-}
-
-/* Error State */
-.dashboard-error {
-    background: #fee;
-    color: #c00;
-    padding: 20px;
-    border-radius: 12px;
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-.dashboard-error button {
-    margin-top: 10px;
-    padding: 8px 16px;
-    background: #c00;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-/* Summary Cards Grid */
-.summary-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
-}
-
-/* Dashboard Sections */
-.dashboard-section {
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.section-header h2 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: #333;
-}
-
-.view-all {
-    color: #3498db;
-    text-decoration: none;
-    font-weight: 500;
-}
-
-.view-all:hover {
-    text-decoration: underline;
-}
-
-/* Transactions List */
-.transactions-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.transaction-item {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 15px;
-    background: #f8f9fa;
-    border-radius: 12px;
-    transition: background 0.2s;
-}
-
-.transaction-item:hover {
-    background: #f0f0f0;
-}
-
-.transaction-icon {
-    width: 45px;
-    height: 45px;
-    background: white;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.3rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.transaction-details {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.transaction-category {
-    font-weight: 600;
-    color: #333;
-}
-
-.transaction-description {
-    font-size: 0.85rem;
-    color: #666;
-}
-
-.transaction-meta {
-    text-align: right;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.transaction-amount {
-    font-weight: 700;
-    font-size: 1.1rem;
-}
-
-.transaction-amount.income {
-    color: #2ecc71;
-}
-
-.transaction-amount.expense {
-    color: #e74c3c;
-}
-
-.transaction-date {
-    font-size: 0.8rem;
-    color: #999;
-}
-
-/* Loading State */
-.transactions-loading {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.transaction-skeleton {
-    height: 75px;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: 12px;
-}
-
-/* Empty State */
-.empty-state {
-    text-align: center;
-    padding: 40px;
-    color: #666;
-}
-
-.empty-state a {
-    color: #3498db;
-    text-decoration: none;
-    font-weight: 500;
-}
-
-/* Quick Actions */
-.quick-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-}
-
-.quick-action {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 12px;
-    text-decoration: none;
-    color: #333;
-    transition: all 0.2s;
-}
-
-.quick-action:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.quick-action.income:hover {
-    background: rgba(46, 204, 113, 0.1);
-}
-
-.quick-action.expense:hover {
-    background: rgba(231, 76, 60, 0.1);
-}
-
-.quick-action.reports:hover {
-    background: rgba(52, 152, 219, 0.1);
-}
-
-.action-icon {
-    font-size: 2rem;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .dashboard-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
-
-    .add-transaction-btn {
-        width: 100%;
-        text-align: center;
-    }
-}
+export default App
 ```
 
 ---
@@ -1143,41 +783,41 @@ Create `src/styles/Dashboard.css`:
 ## ✍️ Exercises
 
 ### Exercise 1: Add Date Range Filter
-Add a date range selector to the dashboard that:
-- Shows current month by default
-- Allows selecting different months
-- Updates all data based on selection
+Add a date range picker to the dashboard that:
+- Allows selecting start and end dates
+- Refetches summary data for the selected range
+- Shows "This Month" / "Last Month" / "Custom" options
 
-### Exercise 2: Add Transaction Count Card
-Add a fourth summary card that:
-- Shows total number of transactions
-- Shows change from previous period
-- Has appropriate styling
+### Exercise 2: Add Loading Skeletons
+Create a reusable `Skeleton` component that:
+- Shows animated placeholder content
+- Can be configured for different shapes (text, circle, rectangle)
+- Matches the layout of actual content
 
-### Exercise 3: Add Loading Skeleton
-Improve the loading state with:
-- Skeleton loaders for all components
-- Smooth animation
-- Proper sizing that matches actual content
+### Exercise 3: Add Empty State
+Create an empty state component for when:
+- User has no transactions
+- Shows helpful illustration
+- Includes call-to-action button
 
 ---
 
 ## ❓ Quiz Questions
 
-### Q1: Layout Component
-Why do we create a separate Layout component instead of putting the sidebar in each page?
+### Q1: Responsive Design
+What does `grid-cols-1 md:grid-cols-3` mean in Tailwind CSS?
 
 **Your Answer**: 
 
 
 ### Q2: Data Fetching
-Why do we use `Promise.all` to fetch dashboard and transactions data?
+Why do we use `Promise.all()` to fetch dashboard data instead of sequential awaits?
 
 **Your Answer**: 
 
 
-### Q3: Conditional Styling
-How does the SummaryCard component determine whether a change is positive or negative for expenses?
+### Q3: Component Structure
+Why do we separate `SummaryCard` and `RecentTransactions` into their own components?
 
 **Your Answer**: 
 
@@ -1186,12 +826,12 @@ How does the SummaryCard component determine whether a change is positive or neg
 
 ## 📝 Bonus Questions (Optional)
 
-### B1: How would you implement real-time updates to the dashboard when new transactions are added?
+### B1: How would you implement real-time updates to the dashboard (e.g., when a new transaction is added)?
 
 **Your Answer**: 
 
 
-### B2: What caching strategy would you use for the dashboard data?
+### B2: What performance optimizations could you add to the dashboard?
 
 **Your Answer**: 
 
@@ -1204,16 +844,17 @@ How does the SummaryCard component determine whether a change is positive or neg
 - [ ] Create Transactions API client
 - [ ] Build Layout component with sidebar
 - [ ] Build SummaryCard component
-- [ ] Build Dashboard page
-- [ ] Implement loading states
-- [ ] Implement error handling
-- [ ] Add responsive styles
-- [ ] Complete Exercise 1 (Date Filter)
-- [ ] Complete Exercise 2 (Transaction Count)
-- [ ] Complete Exercise 3 (Skeleton)
+- [ ] Build RecentTransactions component
+- [ ] Create Dashboard page
+- [ ] Implement responsive design
+- [ ] Add loading states
+- [ ] Update App routes
+- [ ] Complete Exercise 1 (Date Range Filter)
+- [ ] Complete Exercise 2 (Loading Skeletons)
+- [ ] Complete Exercise 3 (Empty State)
 - [ ] Answer all quiz questions
 
 ---
 
 ## 🔗 Next Day Preview
-Tomorrow you'll build **Transaction Management** - the transaction list, add/edit forms, and CRUD operations.
+Tomorrow you'll build **Transaction Management** - creating the transaction list, add/edit forms, and CRUD operations with Tailwind CSS.

@@ -1,9 +1,10 @@
 # Day 29: Controller Layer & Routes (Finance Tracker)
 
 ## 📚 What to Learn Today
-- **Topics**: All API endpoints, route registration
+- **Reference**: [LEARNING_MODULE.md](../../Modules/LEARNING_MODULE.md) - Module 7 (Lines 2922-3648)
+- **Topics**: Fastify controllers, route registration, request/reply handling
 - **Time**: ~45 minutes reading, ~45 minutes practice
-- **Goal**: Complete the REST API for the finance tracker
+- **Goal**: Complete the REST API for the finance tracker using Fastify
 
 ---
 
@@ -17,19 +18,19 @@ Controller Layer:
 ├── Call appropriate service methods
 ├── Format responses
 ├── Handle HTTP status codes
-└── Basic request validation
+└── Basic request validation (via Fastify schemas)
 ```
 
 ### 2. RESTful API Design
 
 ```
-Resource: /api/transactions
+Resource: /api/v1/transactions
 
-GET    /api/transactions      → List all (with filters)
-POST   /api/transactions      → Create new
-GET    /api/transactions/:id  → Get one
-PUT    /api/transactions/:id  → Update
-DELETE /api/transactions/:id  → Delete
+GET    /api/v1/transactions      → List all (with filters)
+POST   /api/v1/transactions      → Create new
+GET    /api/v1/transactions/:id  → Get one
+PUT    /api/v1/transactions/:id  → Update
+DELETE /api/v1/transactions/:id  → Delete
 ```
 
 ### 3. HTTP Status Codes
@@ -50,15 +51,26 @@ Server Errors:
 500 Internal Server Error
 ```
 
-### 4. Express Request Types
+### 4. Fastify Request/Reply Types
 
 ```typescript
-interface Request {
-    body: any;           // POST/PUT data
-    params: { id: string };  // URL parameters
-    query: { page: string }; // Query string
-    user?: { userId: number }; // Added by auth middleware
-}
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+
+// Request with typed body
+FastifyRequest<{ Body: { email: string; password: string } }>
+
+// Request with typed params
+FastifyRequest<{ Params: { id: string } }>
+
+// Request with typed query
+FastifyRequest<{ Querystring: { page?: string; limit?: string } }>
+
+// Combined
+FastifyRequest<{
+    Params: { id: string };
+    Body: { name: string };
+    Querystring: { filter?: string };
+}>
 ```
 
 ---
@@ -67,1031 +79,977 @@ interface Request {
 
 ### Step 1: Auth Controller
 
-Create `src/controllers/authController.ts`:
+Create `src/api/v1/controllers/auth.controller.ts`:
 
 ```typescript
 // ============================================
 // Auth Controller - Authentication Endpoints
 // ============================================
 
-import { Request, Response } from 'express';
-import { authService } from '../services';
-import { ApiResponse, AuthResponse, UserResponse } from '../models/types';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { AuthService } from '../services/auth.service.js'
+import { UserRepository } from '../repositories/user.repository.js'
 
-class AuthController {
+// Request type definitions
+interface RegisterBody {
+    full_name: string
+    email: string
+    password: string
+}
+
+interface LoginBody {
+    email: string
+    password: string
+}
+
+interface UpdateProfileBody {
+    full_name?: string
+    email?: string
+}
+
+interface ChangePasswordBody {
+    currentPassword: string
+    newPassword: string
+}
+
+export async function authController(fastify: FastifyInstance) {
+    // Initialize dependencies
+    const userRepository = new UserRepository()
+    const authService = new AuthService(userRepository)
+
     /**
-     * POST /api/auth/register
+     * POST /api/v1/auth/register
      * Register a new user
      */
-    async register(req: Request, res: Response): Promise<void> {
+    fastify.post<{ Body: RegisterBody }>('/api/v1/auth/register', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['full_name', 'email', 'password'],
+                properties: {
+                    full_name: { type: 'string', minLength: 2 },
+                    email: { type: 'string', format: 'email' },
+                    password: { type: 'string', minLength: 8 }
+                }
+            },
+            response: {
+                201: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: {
+                            type: 'object',
+                            properties: {
+                                user: { type: 'object' },
+                                token: { type: 'string' }
+                            }
+                        },
+                        message: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         try {
-            const { name, email, password } = req.body;
+            const result = await authService.register(request.body)
 
-            const result = await authService.register({ name, email, password });
-
-            const response: ApiResponse<AuthResponse> = {
+            return reply.status(201).send({
                 success: true,
                 data: result,
                 message: 'Registration successful'
-            };
-
-            res.status(201).json(response);
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Registration failed';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Registration failed'
+            
+            if (message.includes('already registered')) {
+                return reply.status(409).send({
+                    success: false,
+                    error: message
+                })
+            }
+
+            return reply.status(400).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 
     /**
-     * POST /api/auth/login
+     * POST /api/v1/auth/login
      * Login user
      */
-    async login(req: Request, res: Response): Promise<void> {
+    fastify.post<{ Body: LoginBody }>('/api/v1/auth/login', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['email', 'password'],
+                properties: {
+                    email: { type: 'string', format: 'email' },
+                    password: { type: 'string' }
+                }
+            }
+        }
+    }, async (request, reply) => {
         try {
-            const { email, password } = req.body;
+            const result = await authService.login(request.body)
 
-            const result = await authService.login({ email, password });
-
-            const response: ApiResponse<AuthResponse> = {
+            return reply.send({
                 success: true,
                 data: result,
                 message: 'Login successful'
-            };
-
-            res.json(response);
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Login failed';
-            res.status(401).json({
+            const message = error instanceof Error ? error.message : 'Login failed'
+
+            return reply.status(401).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 
     /**
-     * GET /api/auth/profile
-     * Get current user profile
+     * GET /api/v1/auth/profile
+     * Get current user profile (requires auth)
      */
-    getProfile(req: Request, res: Response): void {
+    fastify.get('/api/v1/auth/profile', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
+            const userId = request.user.userId
+            const profile = await authService.getProfile(userId)
 
-            if (!userId) {
-                res.status(401).json({
-                    success: false,
-                    error: 'Not authenticated'
-                });
-                return;
-            }
-
-            const profile = authService.getProfile(userId);
-
-            if (!profile) {
-                res.status(404).json({
-                    success: false,
-                    error: 'User not found'
-                });
-                return;
-            }
-
-            const response: ApiResponse<UserResponse> = {
+            return reply.send({
                 success: true,
                 data: profile
-            };
-
-            res.json(response);
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get profile'
+
+            return reply.status(404).send({
                 success: false,
-                error: 'Failed to get profile'
-            });
+                error: message
+            })
         }
-    }
+    })
 
     /**
-     * PUT /api/auth/profile
-     * Update user profile
+     * PUT /api/v1/auth/profile
+     * Update user profile (requires auth)
      */
-    updateProfile(req: Request, res: Response): void {
-        try {
-            const userId = (req as any).user?.userId;
-            const { name, email } = req.body;
-
-            const profile = authService.updateProfile(userId, { name, email });
-
-            if (!profile) {
-                res.status(404).json({
-                    success: false,
-                    error: 'User not found'
-                });
-                return;
+    fastify.put<{ Body: UpdateProfileBody }>('/api/v1/auth/profile', {
+        preHandler: [fastify.authenticate],
+        schema: {
+            body: {
+                type: 'object',
+                properties: {
+                    full_name: { type: 'string', minLength: 2 },
+                    email: { type: 'string', format: 'email' }
+                }
             }
+        }
+    }, async (request, reply) => {
+        try {
+            const userId = request.user.userId
+            const profile = await authService.updateProfile(userId, request.body)
 
-            const response: ApiResponse<UserResponse> = {
+            return reply.send({
                 success: true,
                 data: profile,
                 message: 'Profile updated successfully'
-            };
-
-            res.json(response);
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Update failed';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Failed to update profile'
+
+            return reply.status(400).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 
     /**
-     * PUT /api/auth/password
-     * Change password
+     * POST /api/v1/auth/change-password
+     * Change password (requires auth)
      */
-    async changePassword(req: Request, res: Response): Promise<void> {
+    fastify.post<{ Body: ChangePasswordBody }>('/api/v1/auth/change-password', {
+        preHandler: [fastify.authenticate],
+        schema: {
+            body: {
+                type: 'object',
+                required: ['currentPassword', 'newPassword'],
+                properties: {
+                    currentPassword: { type: 'string' },
+                    newPassword: { type: 'string', minLength: 8 }
+                }
+            }
+        }
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const { currentPassword, newPassword } = req.body;
+            const userId = request.user.userId
+            const { currentPassword, newPassword } = request.body
 
-            await authService.changePassword(userId, currentPassword, newPassword);
+            await authService.changePassword(userId, currentPassword, newPassword)
 
-            res.json({
+            return reply.send({
                 success: true,
                 message: 'Password changed successfully'
-            });
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Password change failed';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Failed to change password'
+
+            return reply.status(400).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 }
-
-export default new AuthController();
 ```
 
 ### Step 2: Transaction Controller
 
-Create `src/controllers/transactionController.ts`:
+Create `src/api/v1/controllers/transaction.controller.ts`:
 
 ```typescript
 // ============================================
 // Transaction Controller - Transaction Endpoints
 // ============================================
 
-import { Request, Response } from 'express';
-import { transactionService } from '../services';
-import { ApiResponse, TransactionWithCategory, TransactionFilters } from '../models/types';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { TransactionService } from '../services/transaction.service.js'
+import { TransactionRepository } from '../repositories/transaction.repository.js'
+import { CategoryRepository } from '../repositories/category.repository.js'
+import { CategoryType } from '../../../types/index.js'
 
-class TransactionController {
+// Request type definitions
+interface TransactionParams {
+    id: string
+}
+
+interface TransactionQuery {
+    page?: string
+    limit?: string
+    startDate?: string
+    endDate?: string
+    type?: CategoryType
+    categoryId?: string
+}
+
+interface CreateTransactionBody {
+    category_id: string
+    amount: number
+    description?: string
+    date: string
+    type: CategoryType
+}
+
+interface UpdateTransactionBody {
+    category_id?: string
+    amount?: number
+    description?: string
+    date?: string
+}
+
+export async function transactionController(fastify: FastifyInstance) {
+    // Initialize dependencies
+    const transactionRepository = new TransactionRepository()
+    const categoryRepository = new CategoryRepository()
+    const transactionService = new TransactionService(transactionRepository, categoryRepository)
+
     /**
-     * GET /api/transactions
-     * List transactions with filters
+     * GET /api/v1/transactions
+     * Get all transactions for current user
      */
-    getAll(req: Request, res: Response): void {
+    fastify.get<{ Querystring: TransactionQuery }>('/api/v1/transactions', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            
-            // Parse query parameters
-            const filters: TransactionFilters = {
-                startDate: req.query.startDate as string,
-                endDate: req.query.endDate as string,
-                type: req.query.type as 'income' | 'expense',
-                categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
-                limit: req.query.limit ? parseInt(req.query.limit as string) : 20,
-                offset: req.query.offset ? parseInt(req.query.offset as string) : 0
-            };
+            const userId = request.user.userId
+            const { page, limit, startDate, endDate, type, categoryId } = request.query
 
-            const result = transactionService.getAll(userId, filters);
+            const pageNum = parseInt(page || '1')
+            const limitNum = parseInt(limit || '20')
+            const offset = (pageNum - 1) * limitNum
 
-            res.json({
+            const result = await transactionService.getTransactions(userId, {
+                startDate,
+                endDate,
+                type,
+                categoryId,
+                limit: limitNum,
+                offset
+            })
+
+            return reply.send({
                 success: true,
                 data: result.transactions,
-                meta: {
-                    total: result.total,
+                pagination: {
                     page: result.page,
-                    pageSize: result.pageSize,
-                    totalPages: result.totalPages
+                    limit: result.limit,
+                    total: result.total,
+                    totalPages: Math.ceil(result.total / result.limit)
                 }
-            });
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get transactions'
+
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to fetch transactions'
-            });
+                error: message
+            })
         }
-    }
+    })
 
     /**
-     * GET /api/transactions/:id
+     * GET /api/v1/transactions/:id
      * Get single transaction
      */
-    getById(req: Request, res: Response): void {
+    fastify.get<{ Params: TransactionParams }>('/api/v1/transactions/:id', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const id = parseInt(req.params.id);
+            const userId = request.user.userId
+            const { id } = request.params
 
-            if (isNaN(id)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid transaction ID'
-                });
-                return;
-            }
+            const transaction = await transactionService.getTransaction(id, userId)
 
-            const transaction = transactionService.getById(id, userId);
-
-            if (!transaction) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Transaction not found'
-                });
-                return;
-            }
-
-            const response: ApiResponse<TransactionWithCategory> = {
+            return reply.send({
                 success: true,
                 data: transaction
-            };
-
-            res.json(response);
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get transaction'
+
+            if (message.includes('not found')) {
+                return reply.status(404).send({
+                    success: false,
+                    error: message
+                })
+            }
+
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to fetch transaction'
-            });
+                error: message
+            })
         }
-    }
+    })
 
     /**
-     * POST /api/transactions
+     * POST /api/v1/transactions
      * Create new transaction
      */
-    create(req: Request, res: Response): void {
+    fastify.post<{ Body: CreateTransactionBody }>('/api/v1/transactions', {
+        preHandler: [fastify.authenticate],
+        schema: {
+            body: {
+                type: 'object',
+                required: ['category_id', 'amount', 'date', 'type'],
+                properties: {
+                    category_id: { type: 'string', format: 'uuid' },
+                    amount: { type: 'number', minimum: 0.01 },
+                    description: { type: 'string', maxLength: 500 },
+                    date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+                    type: { type: 'string', enum: ['income', 'expense'] }
+                }
+            }
+        }
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const { category_id, amount, description, date } = req.body;
+            const userId = request.user.userId
+            const transaction = await transactionService.createTransaction(userId, request.body)
 
-            const transaction = transactionService.create(userId, {
-                category_id,
-                amount: parseFloat(amount),
-                description,
-                date,
-                type: 'expense' // Will be overridden by service based on category
-            });
-
-            const response: ApiResponse<TransactionWithCategory> = {
+            return reply.status(201).send({
                 success: true,
                 data: transaction,
                 message: 'Transaction created successfully'
-            };
-
-            res.status(201).json(response);
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to create transaction';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Failed to create transaction'
+
+            return reply.status(400).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 
     /**
-     * PUT /api/transactions/:id
+     * PUT /api/v1/transactions/:id
      * Update transaction
      */
-    update(req: Request, res: Response): void {
+    fastify.put<{ Params: TransactionParams; Body: UpdateTransactionBody }>('/api/v1/transactions/:id', {
+        preHandler: [fastify.authenticate],
+        schema: {
+            body: {
+                type: 'object',
+                properties: {
+                    category_id: { type: 'string', format: 'uuid' },
+                    amount: { type: 'number', minimum: 0.01 },
+                    description: { type: 'string', maxLength: 500 },
+                    date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }
+                }
+            }
+        }
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const id = parseInt(req.params.id);
-            const { category_id, amount, description, date } = req.body;
+            const userId = request.user.userId
+            const { id } = request.params
 
-            if (isNaN(id)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid transaction ID'
-                });
-                return;
-            }
+            const transaction = await transactionService.updateTransaction(id, userId, request.body)
 
-            const updates: any = {};
-            if (category_id !== undefined) updates.category_id = category_id;
-            if (amount !== undefined) updates.amount = parseFloat(amount);
-            if (description !== undefined) updates.description = description;
-            if (date !== undefined) updates.date = date;
-
-            const transaction = transactionService.update(id, userId, updates);
-
-            if (!transaction) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Transaction not found'
-                });
-                return;
-            }
-
-            const response: ApiResponse<TransactionWithCategory> = {
+            return reply.send({
                 success: true,
                 data: transaction,
                 message: 'Transaction updated successfully'
-            };
-
-            res.json(response);
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to update transaction';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Failed to update transaction'
+
+            if (message.includes('not found')) {
+                return reply.status(404).send({
+                    success: false,
+                    error: message
+                })
+            }
+
+            return reply.status(400).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 
     /**
-     * DELETE /api/transactions/:id
+     * DELETE /api/v1/transactions/:id
      * Delete transaction
      */
-    delete(req: Request, res: Response): void {
+    fastify.delete<{ Params: TransactionParams }>('/api/v1/transactions/:id', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const id = parseInt(req.params.id);
+            const userId = request.user.userId
+            const { id } = request.params
 
-            if (isNaN(id)) {
-                res.status(400).json({
+            await transactionService.deleteTransaction(id, userId)
+
+            return reply.status(204).send()
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete transaction'
+
+            if (message.includes('not found')) {
+                return reply.status(404).send({
                     success: false,
-                    error: 'Invalid transaction ID'
-                });
-                return;
+                    error: message
+                })
             }
 
-            const deleted = transactionService.delete(id, userId);
-
-            if (!deleted) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Transaction not found'
-                });
-                return;
-            }
-
-            res.json({
-                success: true,
-                message: 'Transaction deleted successfully'
-            });
-        } catch (error) {
-            res.status(500).json({
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to delete transaction'
-            });
+                error: message
+            })
         }
-    }
-
-    /**
-     * GET /api/transactions/recent
-     * Get recent transactions
-     */
-    getRecent(req: Request, res: Response): void {
-        try {
-            const userId = (req as any).user?.userId;
-            const limit = req.query.limit ? parseInt(req.query.limit as string) : 5;
-
-            const transactions = transactionService.getRecent(userId, limit);
-
-            res.json({
-                success: true,
-                data: transactions
-            });
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                error: 'Failed to fetch recent transactions'
-            });
-        }
-    }
+    })
 }
-
-export default new TransactionController();
 ```
 
 ### Step 3: Category Controller
 
-Create `src/controllers/categoryController.ts`:
+Create `src/api/v1/controllers/category.controller.ts`:
 
 ```typescript
 // ============================================
 // Category Controller - Category Endpoints
 // ============================================
 
-import { Request, Response } from 'express';
-import { categoryService } from '../services';
-import { ApiResponse, Category } from '../models/types';
+import { FastifyInstance } from 'fastify'
+import { CategoryService } from '../services/category.service.js'
+import { CategoryRepository } from '../repositories/category.repository.js'
+import { CategoryType } from '../../../types/index.js'
 
-class CategoryController {
+// Request type definitions
+interface CategoryParams {
+    id: string
+}
+
+interface CategoryQuery {
+    type?: CategoryType
+}
+
+interface CreateCategoryBody {
+    name: string
+    type: CategoryType
+    icon?: string
+}
+
+interface UpdateCategoryBody {
+    name?: string
+    icon?: string
+}
+
+export async function categoryController(fastify: FastifyInstance) {
+    // Initialize dependencies
+    const categoryRepository = new CategoryRepository()
+    const categoryService = new CategoryService(categoryRepository)
+
     /**
-     * GET /api/categories
-     * List all categories
+     * GET /api/v1/categories
+     * Get all categories for current user
      */
-    getAll(req: Request, res: Response): void {
+    fastify.get<{ Querystring: CategoryQuery }>('/api/v1/categories', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const type = req.query.type as 'income' | 'expense' | undefined;
+            const userId = request.user.userId
+            const { type } = request.query
 
-            let categories: Category[];
+            const categories = await categoryService.getCategories(userId, type)
 
-            if (type) {
-                categories = categoryService.getByType(userId, type);
-            } else {
-                categories = categoryService.getAll(userId);
-            }
-
-            res.json({
+            return reply.send({
                 success: true,
                 data: categories
-            });
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get categories'
+
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to fetch categories'
-            });
+                error: message
+            })
         }
-    }
+    })
 
     /**
-     * GET /api/categories/:id
-     * Get single category
-     */
-    getById(req: Request, res: Response): void {
-        try {
-            const userId = (req as any).user?.userId;
-            const id = parseInt(req.params.id);
-
-            if (isNaN(id)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid category ID'
-                });
-                return;
-            }
-
-            const category = categoryService.getById(id, userId);
-
-            if (!category) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Category not found'
-                });
-                return;
-            }
-
-            const response: ApiResponse<Category> = {
-                success: true,
-                data: category
-            };
-
-            res.json(response);
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                error: 'Failed to fetch category'
-            });
-        }
-    }
-
-    /**
-     * POST /api/categories
+     * POST /api/v1/categories
      * Create custom category
      */
-    create(req: Request, res: Response): void {
+    fastify.post<{ Body: CreateCategoryBody }>('/api/v1/categories', {
+        preHandler: [fastify.authenticate],
+        schema: {
+            body: {
+                type: 'object',
+                required: ['name', 'type'],
+                properties: {
+                    name: { type: 'string', minLength: 2, maxLength: 50 },
+                    type: { type: 'string', enum: ['income', 'expense'] },
+                    icon: { type: 'string', maxLength: 10 }
+                }
+            }
+        }
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const { name, type, icon } = req.body;
+            const userId = request.user.userId
+            const category = await categoryService.createCategory(userId, request.body)
 
-            const category = categoryService.create(userId, {
-                name,
-                type,
-                icon: icon || '📁'
-            });
-
-            const response: ApiResponse<Category> = {
+            return reply.status(201).send({
                 success: true,
                 data: category,
                 message: 'Category created successfully'
-            };
-
-            res.status(201).json(response);
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to create category';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Failed to create category'
+
+            return reply.status(400).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 
     /**
-     * PUT /api/categories/:id
-     * Update category
+     * PUT /api/v1/categories/:id
+     * Update custom category
      */
-    update(req: Request, res: Response): void {
+    fastify.put<{ Params: CategoryParams; Body: UpdateCategoryBody }>('/api/v1/categories/:id', {
+        preHandler: [fastify.authenticate],
+        schema: {
+            body: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', minLength: 2, maxLength: 50 },
+                    icon: { type: 'string', maxLength: 10 }
+                }
+            }
+        }
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const id = parseInt(req.params.id);
-            const { name, icon } = req.body;
+            const userId = request.user.userId
+            const { id } = request.params
 
-            if (isNaN(id)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid category ID'
-                });
-                return;
-            }
+            const category = await categoryService.updateCategory(id, userId, request.body)
 
-            const category = categoryService.update(id, userId, { name, icon });
-
-            if (!category) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Category not found or cannot be modified'
-                });
-                return;
-            }
-
-            const response: ApiResponse<Category> = {
+            return reply.send({
                 success: true,
                 data: category,
                 message: 'Category updated successfully'
-            };
-
-            res.json(response);
+            })
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to update category';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Failed to update category'
+
+            if (message.includes('not found') || message.includes('cannot be modified')) {
+                return reply.status(404).send({
+                    success: false,
+                    error: message
+                })
+            }
+
+            return reply.status(400).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 
     /**
-     * DELETE /api/categories/:id
-     * Delete category
+     * DELETE /api/v1/categories/:id
+     * Delete custom category
      */
-    delete(req: Request, res: Response): void {
+    fastify.delete<{ Params: CategoryParams }>('/api/v1/categories/:id', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const id = parseInt(req.params.id);
+            const userId = request.user.userId
+            const { id } = request.params
 
-            if (isNaN(id)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid category ID'
-                });
-                return;
-            }
+            await categoryService.deleteCategory(id, userId)
 
-            const deleted = categoryService.delete(id, userId);
-
-            if (!deleted) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Category not found or cannot be deleted'
-                });
-                return;
-            }
-
-            res.json({
-                success: true,
-                message: 'Category deleted successfully'
-            });
+            return reply.status(204).send()
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to delete category';
-            res.status(400).json({
+            const message = error instanceof Error ? error.message : 'Failed to delete category'
+
+            if (message.includes('not found') || message.includes('cannot be deleted')) {
+                return reply.status(404).send({
+                    success: false,
+                    error: message
+                })
+            }
+
+            if (message.includes('transactions')) {
+                return reply.status(400).send({
+                    success: false,
+                    error: message
+                })
+            }
+
+            return reply.status(500).send({
                 success: false,
                 error: message
-            });
+            })
         }
-    }
+    })
 }
-
-export default new CategoryController();
 ```
 
 ### Step 4: Report Controller
 
-Create `src/controllers/reportController.ts`:
+Create `src/api/v1/controllers/report.controller.ts`:
 
 ```typescript
 // ============================================
 // Report Controller - Report Endpoints
 // ============================================
 
-import { Request, Response } from 'express';
-import { reportService } from '../services';
+import { FastifyInstance } from 'fastify'
+import { ReportService } from '../services/report.service.js'
+import { TransactionRepository } from '../repositories/transaction.repository.js'
 
-class ReportController {
+// Request type definitions
+interface ReportQuery {
+    startDate?: string
+    endDate?: string
+    months?: string
+}
+
+export async function reportController(fastify: FastifyInstance) {
+    // Initialize dependencies
+    const transactionRepository = new TransactionRepository()
+    const reportService = new ReportService(transactionRepository)
+
     /**
-     * GET /api/reports/dashboard
+     * GET /api/v1/reports/dashboard
      * Get dashboard summary
      */
-    getDashboard(req: Request, res: Response): void {
+    fastify.get('/api/v1/reports/dashboard', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
+            const userId = request.user.userId
+            const summary = await reportService.getDashboardSummary(userId)
 
-            const summary = reportService.getDashboardSummary(userId);
-
-            res.json({
+            return reply.send({
                 success: true,
                 data: summary
-            });
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get dashboard'
+
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to fetch dashboard data'
-            });
+                error: message
+            })
         }
-    }
+    })
 
     /**
-     * GET /api/reports/summary
-     * Get overall summary
-     */
-    getSummary(req: Request, res: Response): void {
-        try {
-            const userId = (req as any).user?.userId;
-            const { startDate, endDate } = req.query;
-
-            const summary = reportService.getSummary(
-                userId,
-                startDate as string,
-                endDate as string
-            );
-
-            res.json({
-                success: true,
-                data: summary
-            });
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                error: 'Failed to fetch summary'
-            });
-        }
-    }
-
-    /**
-     * GET /api/reports/monthly
+     * GET /api/v1/reports/monthly
      * Get monthly trends
      */
-    getMonthlyTrends(req: Request, res: Response): void {
+    fastify.get<{ Querystring: ReportQuery }>('/api/v1/reports/monthly', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const months = req.query.months ? parseInt(req.query.months as string) : 12;
+            const userId = request.user.userId
+            const months = parseInt(request.query.months || '12')
 
-            const trends = reportService.getMonthlyTrends(userId, months);
+            const trends = await reportService.getMonthlyTrends(userId, months)
 
-            res.json({
+            return reply.send({
                 success: true,
                 data: trends
-            });
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get monthly trends'
+
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to fetch monthly trends'
-            });
+                error: message
+            })
         }
-    }
+    })
 
     /**
-     * GET /api/reports/categories
+     * GET /api/v1/reports/categories
      * Get category breakdown
      */
-    getCategoryBreakdown(req: Request, res: Response): void {
+    fastify.get<{ Querystring: ReportQuery }>('/api/v1/reports/categories', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const { startDate, endDate } = req.query;
+            const userId = request.user.userId
+            const { startDate, endDate } = request.query
 
-            const breakdown = reportService.getCategoryBreakdown(
-                userId,
-                startDate as string,
-                endDate as string
-            );
+            const breakdown = await reportService.getCategoryBreakdown(userId, startDate, endDate)
 
-            res.json({
+            return reply.send({
                 success: true,
                 data: breakdown
-            });
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get category breakdown'
+
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to fetch category breakdown'
-            });
+                error: message
+            })
         }
-    }
+    })
 
     /**
-     * GET /api/reports/spending
-     * Get spending by category
+     * GET /api/v1/reports/summary
+     * Get summary for date range
      */
-    getSpending(req: Request, res: Response): void {
+    fastify.get<{ Querystring: ReportQuery }>('/api/v1/reports/summary', {
+        preHandler: [fastify.authenticate]
+    }, async (request, reply) => {
         try {
-            const userId = (req as any).user?.userId;
-            const { startDate, endDate } = req.query;
+            const userId = request.user.userId
+            const { startDate, endDate } = request.query
 
-            const spending = reportService.getSpendingByCategory(
-                userId,
-                startDate as string,
-                endDate as string
-            );
+            if (!startDate || !endDate) {
+                return reply.status(400).send({
+                    success: false,
+                    error: 'startDate and endDate are required'
+                })
+            }
 
-            res.json({
+            const summary = await reportService.getSummaryByDateRange(userId, startDate, endDate)
+
+            return reply.send({
                 success: true,
-                data: spending
-            });
+                data: summary
+            })
         } catch (error) {
-            res.status(500).json({
+            const message = error instanceof Error ? error.message : 'Failed to get summary'
+
+            return reply.status(500).send({
                 success: false,
-                error: 'Failed to fetch spending data'
-            });
+                error: message
+            })
         }
-    }
-
-    /**
-     * GET /api/reports/income
-     * Get income by category
-     */
-    getIncome(req: Request, res: Response): void {
-        try {
-            const userId = (req as any).user?.userId;
-            const { startDate, endDate } = req.query;
-
-            const income = reportService.getIncomeByCategory(
-                userId,
-                startDate as string,
-                endDate as string
-            );
-
-            res.json({
-                success: true,
-                data: income
-            });
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                error: 'Failed to fetch income data'
-            });
-        }
-    }
-}
-
-export default new ReportController();
-```
-
-### Step 5: Route Files
-
-Create `src/routes/authRoutes.ts`:
-
-```typescript
-// ============================================
-// Auth Routes
-// ============================================
-
-import { Router } from 'express';
-import authController from '../controllers/authController';
-import { authMiddleware } from '../middleware/auth';
-
-const router = Router();
-
-// Public routes
-router.post('/register', (req, res) => authController.register(req, res));
-router.post('/login', (req, res) => authController.login(req, res));
-
-// Protected routes
-router.get('/profile', authMiddleware, (req, res) => authController.getProfile(req, res));
-router.put('/profile', authMiddleware, (req, res) => authController.updateProfile(req, res));
-router.put('/password', authMiddleware, (req, res) => authController.changePassword(req, res));
-
-export default router;
-```
-
-Create `src/routes/transactionRoutes.ts`:
-
-```typescript
-// ============================================
-// Transaction Routes
-// ============================================
-
-import { Router } from 'express';
-import transactionController from '../controllers/transactionController';
-import { authMiddleware } from '../middleware/auth';
-
-const router = Router();
-
-// All routes require authentication
-router.use(authMiddleware);
-
-router.get('/', (req, res) => transactionController.getAll(req, res));
-router.get('/recent', (req, res) => transactionController.getRecent(req, res));
-router.get('/:id', (req, res) => transactionController.getById(req, res));
-router.post('/', (req, res) => transactionController.create(req, res));
-router.put('/:id', (req, res) => transactionController.update(req, res));
-router.delete('/:id', (req, res) => transactionController.delete(req, res));
-
-export default router;
-```
-
-Create `src/routes/categoryRoutes.ts`:
-
-```typescript
-// ============================================
-// Category Routes
-// ============================================
-
-import { Router } from 'express';
-import categoryController from '../controllers/categoryController';
-import { authMiddleware } from '../middleware/auth';
-
-const router = Router();
-
-// All routes require authentication
-router.use(authMiddleware);
-
-router.get('/', (req, res) => categoryController.getAll(req, res));
-router.get('/:id', (req, res) => categoryController.getById(req, res));
-router.post('/', (req, res) => categoryController.create(req, res));
-router.put('/:id', (req, res) => categoryController.update(req, res));
-router.delete('/:id', (req, res) => categoryController.delete(req, res));
-
-export default router;
-```
-
-Create `src/routes/reportRoutes.ts`:
-
-```typescript
-// ============================================
-// Report Routes
-// ============================================
-
-import { Router } from 'express';
-import reportController from '../controllers/reportController';
-import { authMiddleware } from '../middleware/auth';
-
-const router = Router();
-
-// All routes require authentication
-router.use(authMiddleware);
-
-router.get('/dashboard', (req, res) => reportController.getDashboard(req, res));
-router.get('/summary', (req, res) => reportController.getSummary(req, res));
-router.get('/monthly', (req, res) => reportController.getMonthlyTrends(req, res));
-router.get('/categories', (req, res) => reportController.getCategoryBreakdown(req, res));
-router.get('/spending', (req, res) => reportController.getSpending(req, res));
-router.get('/income', (req, res) => reportController.getIncome(req, res));
-
-export default router;
-```
-
-Create `src/routes/index.ts`:
-
-```typescript
-// ============================================
-// Route Registration
-// ============================================
-
-import { Express } from 'express';
-import authRoutes from './authRoutes';
-import transactionRoutes from './transactionRoutes';
-import categoryRoutes from './categoryRoutes';
-import reportRoutes from './reportRoutes';
-
-export function registerRoutes(app: Express): void {
-    app.use('/api/auth', authRoutes);
-    app.use('/api/transactions', transactionRoutes);
-    app.use('/api/categories', categoryRoutes);
-    app.use('/api/reports', reportRoutes);
+    })
 }
 ```
 
-### Step 6: Update Main Index
+### Step 5: Controller Index
 
-Update `src/index.ts`:
+Create `src/api/v1/controllers/index.ts`:
+
+```typescript
+// ============================================
+// Controller Exports
+// ============================================
+
+export { authController } from './auth.controller.js'
+export { transactionController } from './transaction.controller.js'
+export { categoryController } from './category.controller.js'
+export { reportController } from './report.controller.js'
+```
+
+### Step 6: Update Entry Point
+
+Update `src/index.ts` to register controllers:
 
 ```typescript
 // ============================================
 // Finance Tracker API - Entry Point
 // ============================================
 
-import express, { Express, Request, Response, NextFunction } from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
+import Fastify from 'fastify'
+import cors from '@fastify/cors'
+import swagger from '@fastify/swagger'
+import swaggerUi from '@fastify/swagger-ui'
+import dotenv from 'dotenv'
+import sequelize from './config/database.js'
 
-// Load environment variables
-dotenv.config();
+// Import controllers
+import {
+    authController,
+    transactionController,
+    categoryController,
+    reportController
+} from './api/v1/controllers/index.js'
 
-// Import database to initialize it
-import './config/database';
+dotenv.config()
 
-// Import route registration
-import { registerRoutes } from './routes';
+const app = Fastify({
+    logger: true
+})
 
-// Create Express app
-const app: Express = express();
-const PORT = process.env.PORT || 3000;
+// Register CORS
+await app.register(cors, {
+    origin: true
+})
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Register Swagger
+await app.register(swagger, {
+    openapi: {
+        info: {
+            title: 'Finance Tracker API',
+            description: 'Personal Finance Tracker REST API',
+            version: '1.0.0'
+        },
+        servers: [
+            {
+                url: `http://localhost:${process.env.PORT || 3000}`,
+                description: 'Development server'
+            }
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT'
+                }
+            }
+        }
+    }
+})
 
-// Request logging
-app.use((req: Request, res: Response, next: NextFunction) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-    next();
-});
+await app.register(swaggerUi, {
+    routePrefix: '/documentation'
+})
+
+// Initialize database
+try {
+    await sequelize.authenticate()
+    console.log('✅ Database connected')
+} catch (error) {
+    console.error('❌ Database connection failed:', error)
+    process.exit(1)
+}
+
+// Register auth decorator (will be implemented in Day 30)
+app.decorate('authenticate', async (request: any, reply: any) => {
+    // Placeholder - will be implemented tomorrow
+    request.user = { userId: 'placeholder', email: 'placeholder@example.com' }
+})
+
+// Register controllers
+await app.register(authController)
+await app.register(transactionController)
+await app.register(categoryController)
+await app.register(reportController)
 
 // Health check
-app.get('/health', (req: Request, res: Response) => {
-    res.json({
-        success: true,
-        message: 'Finance Tracker API is running!',
-        timestamp: new Date().toISOString()
-    });
-});
-
-// Register all routes
-registerRoutes(app);
-
-// 404 handler
-app.use((req: Request, res: Response) => {
-    res.status(404).json({
-        success: false,
-        error: 'Endpoint not found'
-    });
-});
-
-// Error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error('Error:', err.message);
-    res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-    });
-});
+app.get('/health', async () => ({
+    success: true,
+    message: 'Finance Tracker API is running!',
+    timestamp: new Date().toISOString()
+}))
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`
-╔════════════════════════════════════════════╗
-║     Finance Tracker API                    ║
-║     Running on http://localhost:${PORT}       ║
-╚════════════════════════════════════════════╝
-    `);
-});
+const PORT = parseInt(process.env.PORT || '3000')
+const HOST = process.env.HOST || '0.0.0.0'
 
-export default app;
+try {
+    await app.listen({ port: PORT, host: HOST })
+    console.log(`
+╔════════════════════════════════════════════════╗
+║     Finance Tracker API                        ║
+║     Running on http://localhost:${PORT}           ║
+║     Docs at http://localhost:${PORT}/documentation ║
+╚════════════════════════════════════════════════╝
+    `)
+} catch (err) {
+    app.log.error(err)
+    process.exit(1)
+}
+
+export default app
 ```
 
 ---
 
 ## ✍️ Exercises
 
-### Exercise 1: Add Validation Middleware
-Create `src/middleware/validate.ts` that:
-- Validates request body against a schema
-- Returns 400 with detailed errors if validation fails
-- Use it for transaction and category creation
+### Exercise 1: Add Validation Schemas
+Create Fastify JSON schemas for all endpoints:
+- Add response schemas for consistent API responses
+- Add error response schemas
+- Test that invalid requests are rejected with proper error messages
 
-### Exercise 2: Add Pagination Helper
-Create a helper that:
-- Standardizes pagination across all list endpoints
-- Includes next/prev page links
-- Handles edge cases (page out of range)
+### Exercise 2: Add Recent Transactions Endpoint
+Add a new endpoint `GET /api/v1/transactions/recent` that:
+- Returns the 5 most recent transactions
+- Doesn't require pagination
+- Includes category information
 
-### Exercise 3: Add Request Rate Limiting
-Implement rate limiting that:
-- Limits requests per IP address
-- Has different limits for auth vs other endpoints
-- Returns 429 Too Many Requests when exceeded
+### Exercise 3: Add Bulk Delete
+Add a new endpoint `DELETE /api/v1/transactions/bulk` that:
+- Accepts an array of transaction IDs in the body
+- Deletes all specified transactions
+- Returns count of deleted transactions
 
 ---
 
 ## ❓ Quiz Questions
 
-### Q1: HTTP Methods
-What's the difference between PUT and PATCH for updating resources?
+### Q1: Fastify Route Registration
+Why do we use `fastify.post<{ Body: RegisterBody }>` instead of just `fastify.post`?
 
 **Your Answer**: 
 
 
-### Q2: Status Codes
-When should you return 404 vs 400 for a request like `GET /api/transactions/abc`?
+### Q2: HTTP Status Codes
+Why do we return 201 for POST (create) but 200 for PUT (update)?
 
 **Your Answer**: 
 
 
-### Q3: Route Order
-Why is the order of routes important in Express? (e.g., `/transactions/recent` vs `/transactions/:id`)
+### Q3: preHandler
+What is the purpose of `preHandler: [fastify.authenticate]` in route options?
 
 **Your Answer**: 
 
@@ -1100,12 +1058,12 @@ Why is the order of routes important in Express? (e.g., `/transactions/recent` v
 
 ## 📝 Bonus Questions (Optional)
 
-### B1: How would you implement API versioning (e.g., /api/v1/transactions)?
+### B1: Why do we use `reply.status(204).send()` for DELETE instead of returning a success message?
 
 **Your Answer**: 
 
 
-### B2: What is CORS and why do we need the cors middleware?
+### B2: How would you implement rate limiting on the login endpoint to prevent brute force attacks?
 
 **Your Answer**: 
 
@@ -1114,20 +1072,20 @@ Why is the order of routes important in Express? (e.g., `/transactions/recent` v
 
 ## ✅ Day 29 Checklist
 
-- [ ] Understand controller responsibilities
+- [ ] Understand Fastify route registration
 - [ ] Create AuthController with all endpoints
-- [ ] Create TransactionController with CRUD
-- [ ] Create CategoryController with CRUD
-- [ ] Create ReportController with reports
-- [ ] Set up route files for each resource
-- [ ] Register all routes in the app
-- [ ] Test all endpoints manually
-- [ ] Complete Exercise 1 (Validation)
-- [ ] Complete Exercise 2 (Pagination)
-- [ ] Complete Exercise 3 (Rate Limiting)
+- [ ] Create TransactionController with CRUD endpoints
+- [ ] Create CategoryController with CRUD endpoints
+- [ ] Create ReportController with summary endpoints
+- [ ] Understand Fastify request/reply types
+- [ ] Implement JSON schema validation
+- [ ] Update entry point to register controllers
+- [ ] Complete Exercise 1 (Validation Schemas)
+- [ ] Complete Exercise 2 (Recent Transactions)
+- [ ] Complete Exercise 3 (Bulk Delete)
 - [ ] Answer all quiz questions
 
 ---
 
 ## 🔗 Next Day Preview
-Tomorrow you'll implement **Auth Middleware & Testing** - protecting routes with JWT and testing the complete API.
+Tomorrow you'll implement **Auth Middleware** - creating the Fastify authentication hook that verifies JWT tokens and protects routes.
