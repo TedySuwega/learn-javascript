@@ -424,19 +424,40 @@ Create a full BookRepository with all CRUD operations:
 What parameters does a `create` method typically need?
 
 **Your Answer**: 
+- DTO (Data Transfer Obejct) so it will contain the data that need to create like name, type, or neceesary config setting
 
+**✅ Correct!** A `create` method typically takes a DTO (for example `CreateUserDTO`) with only the fields the client is allowed to set—no generated `id` or DB-only columns. That keeps the API clear and matches what you described.
 
 ### Q2: Testability
 How does separating repository help with testing?
 
 **Your Answer**: 
+- it can be usefull and easy to test by mocking the repository like 
+// With repository - Easy to test
+class UserService {
+    constructor(private userRepository: IUserRepository) {}
+    
+    async createUser(data: CreateUserDTO) {
+        // Uses repository - can inject mock for testing
+        return this.userRepository.create(data);
+    }
+}
 
+// In tests:
+const mockRepository = {
+    create: jest.fn().mockResolvedValue({ id: 1, name: "Test" })
+};
+const service = new UserService(mockRepository);
+
+**✅ Correct!** Injecting `IUserRepository` lets tests substitute a mock so `UserService` never hits a real database. Your example matches the pattern from the lesson (constructor injection + `jest.fn()`).
 
 ### Q3: Delete Return
 What should a `delete` method return and why?
 
 **Your Answer**: 
+- we use RETURNING * to show the actual data processed or to confirm deleted data, so we do not need check if record exists or already deleted
 
+**⚠️ Partial.** `RETURNING` (e.g. `RETURNING id` or `RETURNING *`) is how the **query** can tell you whether a row was deleted (`rows.length` or `rowCount`). The **repository method** in this course still usually returns **`Promise<boolean>`** (or a count)—a simple signal for callers—not the deleted row itself. Separating “SQL clause” vs “TypeScript return type” helps.
 
 ---
 
@@ -445,29 +466,124 @@ What should a `delete` method return and why?
 ### B1: What is the difference between soft delete and hard delete? When would you use each?
 
 **Your Answer**: 
+- Soft delete delete the data but save the record , so its like falgging data or mark data like is_deleted = true, so it can be easy to restored
+- Hard delete is permanently delete data and the record data 
 
+**✅ Correct!** Soft delete keeps the row and marks it (e.g. `deleted_at`); hard delete removes it. Restoration/auditing favors soft delete; true removal and simpler queries favor hard delete when policy allows.
 
 ### B2: Why do we use `RETURNING *` in INSERT/UPDATE queries?
 
 **Your Answer**: 
+- we use RETURNING * to show the actual data processed or to confirm deleted data, so we do not need check if record exists or already deleted
 
+**⚠️ Partial.** For **INSERT** and **UPDATE**, `RETURNING *` is mainly used to read back the **full row after the write**—especially **generated values** (`id`, timestamps, defaults)—so your app does not need a second `SELECT`. The “confirm delete” angle applies more to **DELETE** than to INSERT/UPDATE.
+
+---
+
+## 📊 Quiz Results: Day 10
+
+| Question | Result | Notes |
+|----------|--------|-------|
+| Q1: Create Parameters | ✅ Correct | DTO / fields needed for insert |
+| Q2: Testability | ✅ Correct | DI + mock repository pattern |
+| Q3: Delete Return | ⚠️ Partial | Clarify SQL `RETURNING` vs method return (`boolean` / count) |
+| B1: Soft vs Hard Delete | ✅ Correct | Keep row vs remove; restore/audit vs simplicity |
+| B2: RETURNING on INSERT/UPDATE | ⚠️ Partial | Emphasis on generated columns + final row, not delete confirmation |
+
+**Score: 4/5 (80%)**
+
+---
+
+## 📁 Exercise Review
+
+Work lives under [`Exercises/day10/exercise/`](exercise/) (the doc’s “`exercises/day10/`” path is the same folder with different casing).
+
+### Exercise 1: Soft delete
+- **Types**: [`src/types/user.ts`](exercise/src/types/user.ts) — `deletedAt: Date | null`
+- **Repository**: [`src/repositories/userRepository.ts`](exercise/src/repositories/userRepository.ts) — `findAll` excludes soft-deleted rows, `findAllIncludingDeleted`, `softDelete`
+- **Simulator**: [`src/database/fakeDb.ts`](exercise/src/database/fakeDb.ts) — branches for `deleted_at IS NULL` / `NOT NULL`, combined `is_active` + `deleted_at`, `INSERT` sets `deletedAt: null`, `UPDATE` supports `deleted_at` / `NOW()`
+
+### Exercise 2: Bulk operations
+- **Location**: [`src/repositories/userRepository.ts`](exercise/src/repositories/userRepository.ts) — `createMany`, `deleteMany`
+- **Note**: Bulk SQL must stay in sync with `fakeDb` string handlers (or delegate to per-row `create` / `delete`).
+
+### Exercise 3: BookRepository
+- **Repository**: [`src/repositories/bookRepository.ts`](exercise/src/repositories/bookRepository.ts) — CRUD + `findByAuthor`, `findByIsbn`, filters
+- **Types**: [`src/types/book.ts`](exercise/src/types/book.ts)
+- **Simulator**: book queries in [`src/database/fakeDb.ts`](exercise/src/database/fakeDb.ts)
+
+---
+
+## 💬 Q&A Session Notes
+
+### Q: Should Day 10 code live in Day 9’s folder or Day 10’s?
+
+**A:** The lesson asks you to **extend Day 9 in `Exercises/day10/exercise/`** so each day keeps its own snapshot. Copy shared pieces (`fakeDb`, types) from Day 9, then add CRUD and extras in Day 10. You *can* use one folder only if you accept mixing milestones.
+
+---
+
+### Q: What is `filters?.isActive` in `findAll`?
+
+**A:** Optional chaining: if `filters` is `undefined`, the expression short-circuits to `undefined` instead of throwing. Then `!== undefined` checks whether the caller passed an `isActive` filter.
+
+```typescript
+if (filters?.isActive !== undefined) {
+  // only runs when filters exists and isActive was provided
+}
+```
+
+---
+
+### Q: What does `paramIndex` do in `update`?
+
+**A:** It numbers SQL placeholders (`$1`, `$2`, …) so each dynamic column gets a unique parameter, and the **user `id` is appended last** for `WHERE id = $N`. The `values` array must stay in the same order as those placeholders.
+
+---
+
+### Q: Why `is_active` in SQL but `isActive` in TypeScript?
+
+**A:** SQL often uses `snake_case` columns; JavaScript/TypeScript often uses `camelCase`. The repository maps between them in query strings vs object properties. The database layer speaks snake_case; your domain types speak camelCase.
+
+---
+
+### Q: Why does `findAll` return zero rows after I added `WHERE deleted_at IS NULL`?
+
+**A:** `fakeDb` does not parse real SQL—it **matches string prefixes**. If there is no branch for your exact `SELECT`, it falls through to `{ rows: [] }`. Add a handler for that string (and combine conditions in the right order so a generic `WHERE is_active` does not swallow a more specific query).
+
+---
+
+### Q: `deletedAt === null` vs missing property—why did a new user disappear from `findAll`?
+
+**A:** **`undefined !== null`.** Seed users had `deletedAt: null`; `INSERT` omitted `deletedAt`, so it was **`undefined`** and failed a strict `=== null` filter. Fix: set **`deletedAt: null` on insert** in `fakeDb`, or filter with **`== null`**, or treat both in the simulator.
+
+---
+
+### Q: Are `createMany` / `deleteMany` with one SQL string and array params correct?
+
+**A:** `VALUES ($1,$2,$3)` expects **three scalars** for one row, not three arrays. For many rows, use **dynamic `VALUES` with a flat param list**, loop **`create`**, or teach `fakeDb` to consume N×3 params. `DELETE ... id = $1` with `[ids]` is wrong—use **`IN (...)`** or repeated deletes plus matching `fakeDb` logic.
+
+---
+
+### Q: Should `forEach` use `(b: any)`?
+
+**A:** If `findAll()` returns **`Promise<Book[]>`**, TypeScript infers **`Book`** for the callback parameter. Prefer **no annotation** or **`(b: Book)`**; avoid **`any`** so typos are caught.
 
 ---
 
 ## ✅ Day 10 Checklist
 
-- [ ] Read Module 5 (Lines 1901-2187)
-- [ ] Understand create method
-- [ ] Understand update method (partial updates)
-- [ ] Understand delete method
-- [ ] Understand soft delete vs hard delete
-- [ ] Understand how repositories improve testability
-- [ ] Type all code examples
-- [ ] Complete Exercise 1 (Soft delete)
-- [ ] Complete Exercise 2 (Bulk operations)
-- [ ] Complete Exercise 3 (BookRepository)
-- [ ] Answer all quiz questions
-- [ ] Update Progress.md
+- [x] Read Module 5 (Lines 1901-2187)
+- [x] Understand create method
+- [x] Understand update method (partial updates)
+- [x] Understand delete method
+- [x] Understand soft delete vs hard delete
+- [x] Understand how repositories improve testability
+- [x] Type all code examples
+- [x] Complete Exercise 1 (Soft delete)
+- [x] Complete Exercise 2 (Bulk operations)
+- [x] Complete Exercise 3 (BookRepository)
+- [x] Answer all quiz questions
+- [x] Update Progress.md
 
 ---
 

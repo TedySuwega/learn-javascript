@@ -25,7 +25,7 @@
 | 7 | Database Fundamentals | ✅ | Mar 17 | Quiz: 5/5 - SQL/NoSQL, keys, relationships, indexes |
 | 8 | SQL Operations | ✅ | Mar 18 | Quiz: 10/10 - CRUD SQL, orWhere/whereIn query builder, migrations |
 | 9 | Repository Layer Basics | ✅ | Mar 19 | Quiz: 5/5 - repository pattern, find vs filter, fakeDb LIKE handling |
-| 10 | Repository Layer Advanced | ⬜ | | |
+| 10 | Repository Layer Advanced | ✅ | Mar 25, 2026 | Quiz: 4/5 (80%) - Q3/B2 partial (RETURNING vs return type; INSERT/UPDATE RETURNING purpose) |
 
 ### Week 3: Service & Controller Layers
 | Day | Topic | Status | Date | Notes |
@@ -108,7 +108,7 @@
 | 7 | Database Fundamentals | 5/5 | Q1-3 ✅, B1-2 ✅, Ex1-3 ✅ |
 | 8 | SQL Operations | 10/10 | Ex1 ✅ (all corrected), Q1-3 ✅, B1-2 ✅, Ex2-3 ✅ |
 | 9 | Repository Layer Basics | 5/5 | Q1-3 ✅, B1-2 ✅ |
-| 10 | Repository Layer Advanced | - | |
+| 10 | Repository Layer Advanced | 4/5 (80%) | Q1-2 ✅, Q3 ⚠️ (RETURNING vs boolean API), B1 ✅, B2 ⚠️ (INSERT/UPDATE: generated row) |
 
 ### Week 3
 | Day | Topic | Score | Details |
@@ -141,7 +141,7 @@
 | Week | Total Score | Average |
 |------|-------------|---------|
 | 1 | 24/26 (Day 1-5) | 92% |
-| 2 | 27.5/28 (Day 6-9) | 98% |
+| 2 | 31.5/33 (Day 6-10) | 95% |
 | 3 | - | - |
 | 4 | - | - |
 | 5 | - | - |
