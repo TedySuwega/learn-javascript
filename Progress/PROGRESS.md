@@ -30,7 +30,7 @@
 ### Week 3: Service & Controller Layers
 | Day | Topic | Status | Date | Notes |
 |-----|-------|--------|------|-------|
-| 11 | Service Layer Basics | ⬜ | | |
+| 11 | Service Layer Basics | ✅ | Apr 9, 2026 | Quiz: 5/5 (100%) - service vs repo, validation, DTOs, DI, layering |
 | 12 | Service Layer - Security | ⬜ | | |
 | 13 | Controller Layer Basics | ⬜ | | |
 | 14 | Controller Layer Advanced | ⬜ | | |
@@ -113,7 +113,7 @@
 ### Week 3
 | Day | Topic | Score | Details |
 |-----|-------|-------|---------|
-| 11 | Service Layer Basics | - | |
+| 11 | Service Layer Basics | 5/5 (100%) | Q1–Q3 ✅, B1–B2 ✅; Exercises 1–3 in `Exercises/day11/src` |
 | 12 | Service Layer - Security | - | |
 | 13 | Controller Layer Basics | - | |
 | 14 | Controller Layer Advanced | - | |
@@ -142,7 +142,7 @@
 |------|-------------|---------|
 | 1 | 24/26 (Day 1-5) | 92% |
 | 2 | 31.5/33 (Day 6-10) | 95% |
-| 3 | - | - |
+| 3 | 5/5 (Day 11) | 100% |
 | 4 | - | - |
 | 5 | - | - |
 

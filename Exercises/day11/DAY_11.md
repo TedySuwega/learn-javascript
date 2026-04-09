@@ -165,21 +165,24 @@ class UserService {
 
 ## 💻 Code to Type & Understand
 
-Create this structure in `exercises/day11/`:
+Create this project next to this file under [`Exercises/day11/`](./) (same folder as `DAY_11.md`). You can **reuse from Day 10** ([`Exercises/day10/exercise/`](../day10/exercise/)): copy `package.json` (rename the `"name"` field), `tsconfig.json`, `src/database/fakeDb.ts`, `src/repositories/userRepository.ts`, and `src/types/product.ts` / `src/types/book.ts` (the fake DB imports them). Then add or merge the `user.ts` additions below and create `userService.ts` and `index.ts` as shown.
 
 ```
-exercises/day11/
+Exercises/day11/
+├── package.json
+├── tsconfig.json
 ├── src/
 │   ├── types/
-│   │   └── user.ts
+│   │   ├── user.ts
+│   │   ├── product.ts   ← from Day 10 (for fakeDb)
+│   │   └── book.ts      ← from Day 10 (for fakeDb)
 │   ├── database/
-│   │   └── fakeDb.ts
+│   │   └── fakeDb.ts    ← from Day 10
 │   ├── repositories/
-│   │   └── userRepository.ts
+│   │   └── userRepository.ts  ← from Day 10
 │   ├── services/
 │   │   └── userService.ts
 │   └── index.ts
-└── package.json
 ```
 
 **src/types/user.ts**:
@@ -191,12 +194,25 @@ export interface User {
     password: string;
     isActive: boolean;
     createdAt: Date;
+    updatedAt: Date;
+    deletedAt: Date | null;
 }
 
 export interface CreateUserDTO {
     name: string;
     email: string;
     password: string;
+}
+
+export interface UpdateUserDTO {
+    name?: string;
+    email?: string;
+    isActive?: boolean;
+}
+
+export interface UserFilters {
+    isActive?: boolean;
+    search?: string;
 }
 
 export interface RegisterDTO {
@@ -341,7 +357,7 @@ export class UserService {
 **src/index.ts**:
 ```typescript
 // Test Service Layer
-import { UserRepository, userRepository } from "./repositories/userRepository";
+import { userRepository } from "./repositories/userRepository";
 import { UserService } from "./services/userService";
 
 async function main() {
@@ -462,19 +478,57 @@ Create a new ProductService with these methods:
 What is the main difference between Service and Repository layers?
 
 **Your Answer**: 
+Service Layer
+- Handles business logic, rules, and workflows
+- Orchestrates multiple operations (can call multiple repositories or other services)
+- Represents “what the system should do”
+ 
+Repository Layer
+- Handles data access logic
+- Responsible for CRUD operations (query, insert, update, delete)
+- Represents “how data is stored/retrieved”
+- Should NOT contain business rules
 
+Layer	    |Responsibility
+Service	    |Business decisions & use cases
+Repository	|Data persistence & retrieval
+
+**✅ Correct!** You captured separation of concerns clearly: the repository answers *how* data is stored and retrieved; the service answers *what* is allowed and how workflows run, including orchestration across multiple repositories.
 
 ### Q2: Validation Location
 Why should validation be in the Service layer, not the Repository layer?
 
 **Your Answer**: 
+Validation should be in the Service layer because validation is part of business rules, not data access.
 
+- The Service layer decides what is allowed in the system (e.g., valid email, unique username, password rules)
+- The Repository layer should only focus on how to store and retrieve data
+
+Key Reasons:
+Separation of concerns → Repository stays clean (only DB logic)
+Reusability → Same repository can be reused across different business rules
+Flexibility → Business rules can change without touching database logic
+Testability → Business logic is easier to test independently
+
+**✅ Correct!** Validation encodes business rules (“is this input acceptable for this use case?”), not storage mechanics. Keeping it in the service keeps repositories reusable, easier to test in isolation, and avoids duplicating rules if several services share one repository.
 
 ### Q3: Password in Response
 Why do we create a `toUserResponse()` method that excludes the password?
 
 **Your Answer**: 
+We exclude the password to ensure security and proper data exposure.
 
+Reasons:
+- Security → Passwords (even hashed) must never be exposed in API responses
+- Data Privacy → Clients should only receive necessary data
+- Encapsulation → Control what data leaves the system
+- Prevent Accidental Leaks → Avoid exposing sensitive fields in logs or APIs
+Concept:
+This is often called:
+- DTO (Data Transfer Object)
+- Response Model
+
+**✅ Correct!** `toUserResponse()` maps the internal `User` entity to a safe shape for callers (APIs, logs, clients): no password field, even if hashed—defense in depth and a clear contract (DTO / response model).
 
 ---
 
@@ -483,28 +537,68 @@ Why do we create a `toUserResponse()` method that excludes the password?
 ### B1: What is Dependency Injection and why is it useful?
 
 **Your Answer**: 
+- Dependency Injection is software patern that class recieve dependency (object or function) form other external source.
+Why Dependency Injection is Useful:
+- Improved Testability: Because dependencies are passed in, you can easily substitute real components with mock objects or stubs during unit testing.
+- Loose Coupling: Classes are not tightly bound to specific implementations of their dependencies, making the code more flexible.
+- Maintainability and Flexibility: Changes in one part of the system (e.g., swapping a database driver) do not require changes to the classes using that dependency.
+- Code Reusability: Components become easier to reuse in different contexts because they don't manage their own dependencies.
+- Simplified Boilerplate: Reduces the need to write code for creating and managing objects, leading to cleaner code
 
+**✅ Correct!** You covered the main wins: testability (swap mocks), loose coupling, and easier changes to implementations. Small note: DI does not always remove boilerplate by itself—frameworks or manual “composition roots” still wire dependencies—but your reasoning is sound.
 
 ### B2: What would happen if we put business logic in the Repository layer?
 
 **Your Answer**: 
+- if we put business logic in the Repository Layer it will meesy with the logic, and the repository will not focused on database only, it will mix and it hard to maintenence
 
+**✅ Correct!** Mixing rules into the repository blurs boundaries: harder to test business rules without a database, harder to reuse the same persistence for different workflows, and changes to policy force edits next to SQL-like code. You could also mention duplicated rules if multiple entry points call the repository directly.
+
+---
+
+## 📊 Quiz Results: Day 11
+
+| Question | Result | Notes |
+|----------|--------|-------|
+| Q1: Service vs Repository | ✅ Correct | Clear responsibilities table; orchestration called out. |
+| Q2: Validation location | ✅ Correct | Business rules vs data access, reuse and testability. |
+| Q3: `toUserResponse` | ✅ Correct | Security, privacy, DTO / response model. |
+| B1: Dependency Injection | ✅ Correct | Testability, coupling, flexibility; minor typos in prose only. |
+| B2: Logic in Repository | ✅ Correct | Mixed concerns and maintenance; could add testing/reuse angle explicitly. |
+
+**Score: 5/5 (100%)**
+
+**Exercise review:** Runnable code lives in [`Exercises/day11/`](./) (`package.json`, `tsconfig.json`, `src/`). In addition to the typed walkthrough (`userService.ts`, `index.ts`), the folder includes `productRepository.ts`, `productService.ts`, and an expanded `userService` / `index.ts` aligned with Exercises 1–3.
+
+---
+
+## 💬 Q&A Session Notes
+
+### Q: In the learning module, `UserService` has an empty constructor and `UserRepository` is created at module scope; Day 11 uses constructor injection. Is Day 11 correct? Is DI better?
+
+**A:** Day 11’s constructor injection matches the usual pattern for services: dependencies are explicit and easy to replace (e.g. mocks in tests). A module-level `new UserRepository()` works for tiny demos but hides the dependency and couples the module to one implementation. Prefer DI for anything you plan to test or evolve.
+
+---
+
+### Q: Is the service layer split by actor or by “thing” (UserService, ProductService)? Is all user-related business logic in `UserService`? How does that compare to a “use case” from C# / mobile?
+
+**A:** Commonly you split by **domain area** (user, product), not by actor; actors often affect **authorization**, not the main service split. `UserService` groups user-related workflows (register, profile, etc.). A **use case** is often **one class per flow** (e.g. `RegisterUserUseCase`); a **service** can bundle many such flows in one type. Same ideas, different granularity—use-case-per-class gives smaller units; `UserService` with many methods is one bucket for all user flows.
 
 ---
 
 ## ✅ Day 11 Checklist
 
-- [ ] Read Module 6 (Lines 2188-2500)
-- [ ] Understand what the Service layer does
-- [ ] Understand the difference between Service and Repository
-- [ ] Understand validation in the Service layer
-- [ ] Understand Dependency Injection basics
-- [ ] Type all code examples
-- [ ] Complete Exercise 1 (Update profile)
-- [ ] Complete Exercise 2 (Deactivate account)
-- [ ] Complete Exercise 3 (ProductService)
-- [ ] Answer all quiz questions
-- [ ] Update Progress.md
+- [x] Read Module 6 (Lines 2188-2500)
+- [x] Understand what the Service layer does
+- [x] Understand the difference between Service and Repository
+- [x] Understand validation in the Service layer
+- [x] Understand Dependency Injection basics
+- [x] Type all code examples
+- [x] Complete Exercise 1 (Update profile)
+- [x] Complete Exercise 2 (Deactivate account)
+- [x] Complete Exercise 3 (ProductService)
+- [x] Answer all quiz questions
+- [x] Update Progress.md
 
 ---
 
