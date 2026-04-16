@@ -573,19 +573,27 @@ Create a simplified ForgotPasswordService with:
 Why should passwords be hashed instead of stored in plain text?
 
 **Your Answer**: 
+- With hash it will change or convert the password text or string into scrambled string taht can be reversed, so if someone steal your database , they cant see the password and it will more sequre
 
+**⚠️ Partial** You are right that hashing protects users when a database is stolen: attackers should not get usable passwords. One correction: bcrypt-style hashes are **one-way** in practice (not meaningfully “reversible”); verification works by hashing a guess and comparing. If you meant “can’t be read back as plain text,” that matches how we use hashing.
 
 ### Q2: Generic Errors
 Why do we use the same error message "Invalid email or password" for both wrong email and wrong password?
 
 **Your Answer**: 
+- Witht the same error it will make sequre because that will not exaclty trell wich one is correct, it will prevent someone to burtforce the value
 
+**✅ Correct!** Same message avoids **user enumeration** (confirming whether an email is registered) and avoids leaking which factor failed. It does not stop brute force by itself, but it removes an easy signal for attackers.
 
 ### Q3: Salt Rounds
 What are salt rounds in bcrypt and how do they affect security?
 
 **Your Answer**: 
+- Salt in bcrypt makes the hash password sequere because taht will create different or unique hash password even the pssword is the same, for example ,
+"password123" + salt1 → "xyz789..."
+"password123" + salt2 → "def456..."
 
+**⚠️ Partial** Your examples capture **why salt matters** (same password → different stored hashes, which defeats rainbow tables). **Salt rounds** (the `10` in `$2b$10$...`) are the **cost factor**: bcrypt runs its core function `2^rounds` times, so higher rounds mean slower hashing for everyone—including attackers guessing passwords—at the cost of more CPU time per login/signup.
 
 ---
 
@@ -594,29 +602,70 @@ What are salt rounds in bcrypt and how do they affect security?
 ### B1: What is a "rainbow table attack" and how does bcrypt's salt prevent it?
 
 **Your Answer**: 
+- A rainbow table attack is a password-cracking technique that uses a precomputed, massive database (a "rainbow table") of hashed common passwords to reverse-engineer stolen password hashes. Instead of computing the hash for every guess in real-time, attackers can look up a stolen hash in their precomputed table to find the corresponding plaintext password almost instantly. 
 
+Bcrypt's salt prevents this attack by introducing randomness into the hashing process, ensuring that even identical passwords produce unique hash values.
+
+**✅ Correct!** Clear distinction between precomputed tables and per-password randomness; bcrypt’s embedded salt is exactly why identical passwords do not produce identical hashes.
 
 ### B2: Why should the forgot password endpoint always return success, even if the email doesn't exist?
 
 **Your Answer**: 
+- The "forgot password" endpoint should always return a success message (e.g., "If an account exists, an email has been sent") to prevent email enumeration. This security measure stops malicious actors from confirming valid user emails by testing if the system rejects unknown addresses. It ensures privacy and prevents account targeting
 
+**✅ Correct!** You nailed **email enumeration** and why a uniform response is a standard practice (often paired with rate limiting and logging on the server).
+
+---
+
+## 📊 Quiz Results: Day 12
+
+| Question | Result | Notes |
+|----------|--------|-------|
+| Q1: Why Hash? | ⚠️ Partial | Strong on breach risk; fix “reversible” → one-way hashes |
+| Q2: Generic Errors | ✅ Correct | Enumeration / same error message |
+| Q3: Salt Rounds | ⚠️ Partial | Good on salt uniqueness; add cost factor / slower with higher rounds |
+| B1: Rainbow table | ✅ Correct | Rainbow table + salt role |
+| B2: Forgot password response | ✅ Correct | Enumeration / privacy |
+
+**Score: 4/5 (80%)** (two partials on Q1 and Q3; Q2, B1, B2 full credit)
+
+### Exercise review (`Exercises/day12/src/`)
+
+- **Exercise 2:** Implemented in [`passwordUtils.ts`](src/services/passwordUtils.ts) (`validatePassword` with upper, lower, digit, special `!@#$%^&*`).
+- **Exercise 3:** [`forgotPasswordService.ts`](src/services/forgotPasswordService.ts) — in-memory `Map`, `requestReset` / `resetPassword`, token expiry and one-time use; wired in [`index.ts`](src/index.ts).
+- **Exercise 1:** Done — [`passwordUtils.ts`](src/services/passwordUtils.ts) uses **`bcrypt`** via exported **`passwordCrypto`** (`hash` / `compare`); [`userService.ts`](src/services/userService.ts) and [`forgotPasswordService.ts`](src/services/forgotPasswordService.ts) import it.
+- **Other:** [`fakeDb.ts`](src/database/fakeDb.ts) uses `max(user.id) + 1` for `nextUserId` so new users do not collide with seed IDs (important for password reset targeting the right row).
+
+---
+
+## 💬 Q&A Session Notes
+
+### Q: I do not know the flow for forgot password (Exercise 3).
+
+**A:** Think in two steps. **`requestReset(email)`** looks up the user, generates a cryptographically random token, and stores a mapping **token → userId + expiry** (in memory for this exercise; production might use Redis or a `password_reset_tokens` table and email a link). **`resetPassword(token, newPassword)`** loads that mapping, rejects missing/expired tokens, hashes the new password, updates the user in the repository, then **deletes** the token so it cannot be reused. A real app emails `https://yoursite/reset?token=...` instead of returning the token.
+
+---
+
+### Q: Please adjust (implement the plan / wire forgot password).
+
+**A:** A dedicated `ForgotPasswordService` was added with an in-memory store; shared hashing/validation moved to `passwordUtils.ts`; `index.ts` demos request → reset → login with the new password, then proves a reused token fails. `UserService` no longer owns that flow. See Exercise review above for file pointers.
 
 ---
 
 ## ✅ Day 12 Checklist
 
-- [ ] Read Module 6 (Lines 2501-2921)
-- [ ] Understand why password hashing is essential
-- [ ] Understand how bcrypt works (hash and compare)
-- [ ] Understand salt rounds
-- [ ] Understand generic error messages for security
-- [ ] Understand forgot password flow
-- [ ] Type all code examples
-- [ ] Complete Exercise 1 (Real bcrypt)
-- [ ] Complete Exercise 2 (Password strength)
-- [ ] Complete Exercise 3 (ForgotPasswordService)
-- [ ] Answer all quiz questions
-- [ ] Update Progress.md
+- [x] Read Module 6 (Lines 2501-2921)
+- [x] Understand why password hashing is essential
+- [x] Understand how bcrypt works (hash and compare)
+- [x] Understand salt rounds
+- [x] Understand generic error messages for security
+- [x] Understand forgot password flow
+- [x] Type all code examples
+- [x] Complete Exercise 1 (Real bcrypt)
+- [x] Complete Exercise 2 (Password strength)
+- [x] Complete Exercise 3 (ForgotPasswordService)
+- [x] Answer all quiz questions
+- [x] Update Progress.md
 
 ---
 

@@ -1,0 +1,16 @@
+{
+  "name": "day12-exercise",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npx ts-node src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.2.0"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0"
+  }
+}
