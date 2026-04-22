@@ -554,7 +554,13 @@ Create a ProductController with:
 What is the main responsibility of the Controller layer?
 
 **Your Answer**: 
-
+| Responsibility | Example |
+|---------------|---------|
+| Parse request data | Extract `id` from `/users/:id` |
+| Call service methods | `userService.getUserById(id)` |
+| Handle errors | Catch exceptions, return error responses |
+| Set status codes | 200, 201, 400, 404, 500 |
+| Format responses | Return JSON with consistent structure |
 
 ### Q2: Status Codes
 What status code should you return when:
@@ -563,12 +569,18 @@ b) Resource not found?
 c) Invalid input data?
 
 **Your Answer**: 
+a)201 Created
+b) 404 Not Found
+c) 400 Bad Request (or 422 Unprocessable Entity for semantic errors)
 
 
 ### Q3: Request Data
 What are the three main sources of data in an HTTP request?
 
 **Your Answer**: 
+- Request Body (JSON/XML data, usually for POST/PUT)
+- Query Parameters (e.g., ?id=123&sort=asc)
+- Path Variables/Parameters (e.g., /users/123)
 
 
 ---
@@ -578,12 +590,17 @@ What are the three main sources of data in an HTTP request?
 ### B1: Why should business logic NOT be in the controller?
 
 **Your Answer**: 
+Keeping business logic out of the controller (and in the Service layer) promotes Separation of Concerns.
+- Reusable: You can call the same logic from a CLI tool or a scheduled task without needing an HTTP request.
+- Testable: It is much easier to unit test pure logic than it is to mock HTTP contexts.
+- Maintainable: Controllers stay "thin," making the entry points of your API easy to read.
 
 
 ### B2: What is the difference between 401 Unauthorized and 403 Forbidden?
 
 **Your Answer**: 
-
+- 401 Unauthorized: "I don't know who you are." The user hasn't provided valid authentication credentials (they aren't logged in).
+- 403 Forbidden: "I know who you are, but you aren't allowed here." The user is authenticated but lacks the necessary permissions (e.g., a "User" trying to access an "Admin" panel).
 
 ---
 
