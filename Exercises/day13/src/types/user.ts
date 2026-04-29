@@ -41,9 +41,16 @@ export interface LoginResponse {
   message: string;
 }
 
-/** Optional filters — used when you implement Exercise 2 on `GET /users`. */
+/** Parsed filters for service/repository (`GET /users` after parsing query strings). */
 export interface UserFilters {
   isActive?: boolean;
   limit?: number;
+  search?: string;
+}
+
+/** Raw Fastify `request.query` — URL query values are always strings. */
+export interface UserListQuery {
+  active?: string;
+  limit?: string;
   search?: string;
 }

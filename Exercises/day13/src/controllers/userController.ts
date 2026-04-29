@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { UserService } from "../services/userService";
+import { UserFilters, UserListQuery } from "../types/user";
 
 // Type definitions for request parameters
 interface GetByIdParams {
@@ -23,11 +24,27 @@ export class UserController {
     }
     
     // ============ GET /users ============
-    async getAll(request: FastifyRequest, reply: FastifyReply) {
+    async getAll(request: FastifyRequest<{ Querystring: UserListQuery }>, reply: FastifyReply) {
         console.log("[Controller] GET /users");
         
+        const { limit, search, active } = request.query;
+
+        const filters: UserFilters = {};
+        
+        if (limit !== undefined) {
+          const n = parseInt(limit, 10);
+          if (!Number.isNaN(n) && n > 0) filters.limit = n;
+        }
+        if (search !== undefined && search.trim() !== "") {
+          filters.search = search.trim();
+        }
+        if (active !== undefined) {
+          if (active === "true") filters.isActive = true;
+          else if (active === "false") filters.isActive = false;
+        }
+
         try {
-            const users = await this.userService.getAllUsers();
+            const users = await this.userService.getAllUsers(filters);
             
             return reply.status(200).send({
                 success: true,
@@ -178,18 +195,8 @@ export class UserController {
                     error: "Invalid user ID"
                 });
             }
-            const user = await this.userService.getUserById(userId);
-            if (!user) {
-                return reply.status(404).send({
-                    success: false,
-                    error: "User not found"
-                });
-            }
             await this.userService.deleteUser(userId);
-            return reply.status(204).send({
-                success: true,
-                message: "User deleted successfully"
-            });
+            return reply.code(204).send();
         } catch (error: any) {
             console.log("[Controller] Error:", error.message);
             const statusCode = this.mapErrorToStatus(error);

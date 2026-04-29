@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { UserController } from "../controllers/userController";
 import { UserService } from "../services/userService";
 import { userRepository } from "../repositories/userRepository";
+import { UserListQuery } from "../types/user";
 
 export async function userRoutes(app: FastifyInstance) {
     // Create dependencies
@@ -9,8 +10,9 @@ export async function userRoutes(app: FastifyInstance) {
     const userController = new UserController(userService);
     
     // Register routes (generics satisfy controller request typings)
-    app.get("/users", (req, reply) => userController.getAll(req, reply));
-
+    app.get<{ Querystring: UserListQuery }>("/users", (req, reply) =>
+        userController.getAll(req, reply));
+    
     app.get<{ Params: { id: string } }>("/users/:id", (req, reply) =>
         userController.getById(req, reply));
 

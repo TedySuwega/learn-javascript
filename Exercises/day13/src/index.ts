@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { userRoutes } from "./routes/userRoutes";
+import { productRoutes } from "./routes/productRoutes";
 
 const app = Fastify({ logger: false });
 const PORT = 3000;
@@ -9,6 +10,7 @@ async function main() {
     
     // Register routes
     await app.register(userRoutes);
+    await app.register(productRoutes);
     
     // Health check
     app.get("/health", async () => ({ status: "ok" }));
@@ -28,6 +30,24 @@ async function main() {
     });
     console.log(`   Status: ${getAllResponse.statusCode}`);
     console.log(`   Body: ${getAllResponse.body}\n`);
+    
+    // Test GET /users with limit, search, and active
+    console.log("2. GET /users with limit, search, and active");
+    const getAllResponseWithFilters = await app.inject({
+        method: "GET",
+        url: "/users?limit=10&search=John&active=true"
+    });
+    console.log(`   Status: ${getAllResponseWithFilters.statusCode}`);
+    console.log(`   Body: ${getAllResponseWithFilters.body}\n`);
+    
+    // Test GET /users with limit, search, and inactive
+    console.log("3. GET /users with limit, search, and inactive");
+    const getAllResponseWithInactiveFilters = await app.inject({
+        method: "GET",
+        url: "/users?limit=10&search=John&active=false"
+    });
+    console.log(`   Status: ${getAllResponseWithInactiveFilters.statusCode}`);
+    console.log(`   Body: ${getAllResponseWithInactiveFilters.body}\n`);
     
     // Test GET /users/1
     console.log("2. GET /users/1");
