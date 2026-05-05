@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { UserService } from "../services/userService";
 import { UserFilters, UserListQuery } from "../types/user";
+import { mapErrorToStatus } from "../utils/mapErrorToStatus";
 
 // Type definitions for request parameters
 interface GetByIdParams {
@@ -88,7 +89,7 @@ export class UserController {
             console.log("[Controller] Error:", error.message);
             
             // Map error to appropriate status code
-            const statusCode = this.mapErrorToStatus(error);
+            const statusCode = mapErrorToStatus(error);
             return reply.status(statusCode).send({
                 success: false,
                 error: error.message
@@ -124,7 +125,7 @@ export class UserController {
         } catch (error: any) {
             console.log("[Controller] Error:", error.message);
             
-            const statusCode = this.mapErrorToStatus(error);
+            const statusCode = mapErrorToStatus(error);
             return reply.status(statusCode).send({
                 success: false,
                 error: error.message
@@ -166,7 +167,7 @@ export class UserController {
                 });
             }
             
-            const statusCode = this.mapErrorToStatus(error);
+            const statusCode = mapErrorToStatus(error);
             return reply.status(statusCode).send({
                 success: false,
                 error: error.message
@@ -199,33 +200,11 @@ export class UserController {
             return reply.code(204).send();
         } catch (error: any) {
             console.log("[Controller] Error:", error.message);
-            const statusCode = this.mapErrorToStatus(error);
+            const statusCode = mapErrorToStatus(error);
             return reply.status(statusCode).send({
                     success: false,
                 error: error.message
             });
         }
-    }   
-    // ============ HELPER: Error to Status Code ============
-    private mapErrorToStatus(error: Error): number {
-        const message = error.message.toLowerCase();
-        
-        if (message.includes("not found")) {
-            return 404;
-        }
-        if (message.includes("already") || 
-            message.includes("invalid") || 
-            message.includes("required") ||
-            message.includes("must be")) {
-            return 400;
-        }
-        if (message.includes("unauthorized")) {
-            return 401;
-        }
-        if (message.includes("forbidden")) {
-            return 403;
-        }
-        
-        return 500;
     }
 }

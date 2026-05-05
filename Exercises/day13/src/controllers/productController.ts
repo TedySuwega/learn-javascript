@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { ProductService } from "../services/productService";
+import { mapErrorToStatus } from "../utils/mapErrorToStatus";
 
 /**
  * Exercise 3 — implement this controller (DAY_13.md).
@@ -13,6 +14,9 @@ import { ProductService } from "../services/productService";
  * - `createProduct(body)` → 201 or 400
  *
  * Until you implement the methods below, routes return 501 so the app still compiles.
+ *
+ * For try/catch error responses, use `mapErrorToStatus` from `../utils/mapErrorToStatus`
+ * (same helper as `UserController`).
  */
 export class ProductController {
   constructor(private productService: ProductService) {
@@ -21,10 +25,20 @@ export class ProductController {
 
   // ============ GET /products ============
   async getAll(_request: FastifyRequest, reply: FastifyReply) {
-    return reply.status(501).send({
-      success: false,
-      error: "Exercise 3: implement ProductController.getAll (GET /products)",
-    });
+    console.log("[Controller] GET /products");
+
+    try {
+      const products = await this.productService.getAllProducts();
+      return reply.status(200).send({
+        success: true,
+        data: { products },
+        count: products.length,
+      });
+    } catch (error: any) {
+      console.log("[Controller] Error:", error.message);
+      const statusCode = mapErrorToStatus(error);
+      return reply.status(statusCode).send({success: false, error: error.message});
+    }
   }
 
   // ============ GET /products/:id ============
@@ -32,10 +46,29 @@ export class ProductController {
     _request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) {
-    return reply.status(501).send({
-      success: false,
-      error: "Exercise 3: implement ProductController.getById (GET /products/:id)",
-    });
+    const { id } = _request.params;
+    console.log(`[Controller] GET /products/${id}`);
+
+    try {
+      const productId = parseInt(id);
+      if (isNaN(productId)) {
+        return reply.status(400).send({
+          success: false,
+          error: "Invalid product ID format"
+        });
+      }
+
+      const product = await this.productService.getProductById(productId);
+      
+      return reply.status(200).send({
+        success: true,
+        data: { product }
+      });
+    } catch (error: any) {
+      console.log("[Controller] Error:", error.message);
+      const statusCode = mapErrorToStatus(error);
+      return reply.status(statusCode).send({success: false, error: error.message});
+    }
   }
 
   // ============ POST /products ============
@@ -45,9 +78,16 @@ export class ProductController {
     }>,
     reply: FastifyReply,
   ) {
-    return reply.status(501).send({
-      success: false,
-      error: "Exercise 3: implement ProductController.create (POST /products)",
-    });
+    console.log("[Controller] POST /products");
+
+    try {
+      const { name, price, stock, category } = _request.body;
+      const product = await this.productService.createProduct({ name, price, stock, category });
+      return reply.status(201).send({success: true, data: {product}});
+    } catch (error: any) {
+      console.log("[Controller] Error:", error.message);
+      const statusCode = mapErrorToStatus(error);
+      return reply.status(statusCode).send({success: false, error: error.message});  
+    }
   }
 }

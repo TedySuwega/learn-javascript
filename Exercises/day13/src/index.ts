@@ -145,6 +145,55 @@ async function main() {
     console.log(`   Status: ${invalidIdDeleteResponse.statusCode}`);
     console.log(`   Body: ${invalidIdDeleteResponse.body}\n`);
 
+
+    // Test GET /products
+    console.log("11. GET /products");
+    const getProductsResponse = await app.inject({
+        method: "GET",
+        url: "/products"
+    });
+    console.log(`   Status: ${getProductsResponse.statusCode}`);
+    console.log(`   Body: ${getProductsResponse.body}\n`);
+
+    // Test GET /products/1
+    console.log("12. GET /products/1");
+    const getProductByIdResponse = await app.inject({
+        method: "GET",
+        url: "/products/1"
+    });
+    console.log(`   Status: ${getProductByIdResponse.statusCode}`);
+    console.log(`   Body: ${getProductByIdResponse.body}\n`);
+
+    // Test POST /products
+    console.log("13. POST /products");
+    const createProductResponse = await app.inject({
+        method: "POST",
+        url: "/products",
+        payload: {
+            name: "Product 1",
+            price: 100,
+            stock: 10,
+            category: "Category 1"
+        }
+    });
+    console.log(`   Status: ${createProductResponse.statusCode}`);
+    console.log(`   Body: ${createProductResponse.body}\n`);
+
+    // Test POST /products (invalid body)
+    console.log("14. POST /products (invalid body)");
+    const invalidBodyCreateProductResponse = await app.inject({
+        method: "POST",
+        url: "/products",
+        payload: {
+            name: "Product 1",
+            price: 100,
+            stock: 10,
+            category: "Category 1"
+        }
+    });
+    console.log(`   Status: ${invalidBodyCreateProductResponse.statusCode}`);
+    console.log(`   Body: ${invalidBodyCreateProductResponse.body}\n`);
+
     // Close server
     await app.close();
 }

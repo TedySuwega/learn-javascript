@@ -562,6 +562,8 @@ What is the main responsibility of the Controller layer?
 | Set status codes | 200, 201, 400, 404, 500 |
 | Format responses | Return JSON with consistent structure |
 
+**✅ Correct!** Your table matches the controller’s role: parse input, call services, map errors to HTTP, set status codes, and return consistent JSON—the HTTP boundary for your app.
+
 ### Q2: Status Codes
 What status code should you return when:
 a) Successfully creating a new resource?
@@ -573,6 +575,7 @@ a)201 Created
 b) 404 Not Found
 c) 400 Bad Request (or 422 Unprocessable Entity for semantic errors)
 
+**✅ Correct!** Use **201 Created** for successful POST creation, **404** when the target resource does not exist, and **400** for invalid client input. Mentioning **422** for “valid JSON but business rules failed” is a good distinction.
 
 ### Q3: Request Data
 What are the three main sources of data in an HTTP request?
@@ -582,6 +585,7 @@ What are the three main sources of data in an HTTP request?
 - Query Parameters (e.g., ?id=123&sort=asc)
 - Path Variables/Parameters (e.g., /users/123)
 
+**✅ Correct!** Those are the three sources this module emphasizes. In production you also often read **headers** (for example `Authorization`); worth remembering for interviews.
 
 ---
 
@@ -595,6 +599,7 @@ Keeping business logic out of the controller (and in the Service layer) promotes
 - Testable: It is much easier to unit test pure logic than it is to mock HTTP contexts.
 - Maintainable: Controllers stay "thin," making the entry points of your API easy to read.
 
+**✅ Correct!** Separation of concerns, reuse (CLI, jobs), easier unit testing without HTTP mocks, and thin route handlers are the standard reasons to keep rules out of controllers.
 
 ### B2: What is the difference between 401 Unauthorized and 403 Forbidden?
 
@@ -602,21 +607,51 @@ Keeping business logic out of the controller (and in the Service layer) promotes
 - 401 Unauthorized: "I don't know who you are." The user hasn't provided valid authentication credentials (they aren't logged in).
 - 403 Forbidden: "I know who you are, but you aren't allowed here." The user is authenticated but lacks the necessary permissions (e.g., a "User" trying to access an "Admin" panel).
 
+**✅ Correct!** **401** means authentication failed or credentials are missing; **403** means the caller is recognized but not permitted for this resource or action.
+
+---
+
+## 📊 Quiz Results: Day 13
+
+| Question | Result | Notes |
+|----------|--------|-------|
+| Q1: Controller responsibility | ✅ Correct | Matches parse → service → errors → status → response shape |
+| Q2: Status codes | ✅ Correct | 201 / 404 / 400 (+ optional 422 nuance) |
+| Q3: Request data sources | ✅ Correct | Body, query, path; headers optional extra |
+| B1: Logic not in controller | ✅ Correct | SoC, reuse, testing, thin controllers |
+| B2: 401 vs 403 | ✅ Correct | Not authenticated vs not allowed |
+
+**Score: 5/5 (100%)**
+
+### Exercise review (`Exercises/day13/src/`)
+
+- **Exercise 1:** [`routes/userRoutes.ts`](src/routes/userRoutes.ts) — `DELETE /users/:id`; [`controllers/userController.ts`](src/controllers/userController.ts) — `deleteUser`; [`services/userService.ts`](src/services/userService.ts) — `deleteUser`; [`repositories/userRepository.ts`](src/repositories/userRepository.ts) — soft delete; covered in [`index.ts`](src/index.ts) inject tests.
+- **Exercise 2:** [`controllers/userController.ts`](src/controllers/userController.ts) — `getAll` parses `limit`, `search`, `active`; repository filtering in [`repositories/userRepository.ts`](src/repositories/userRepository.ts); types in [`types/user.ts`](src/types/user.ts).
+- **Exercise 3:** [`controllers/productController.ts`](src/controllers/productController.ts), [`routes/productRoutes.ts`](src/routes/productRoutes.ts), registered in [`index.ts`](src/index.ts); shared [`utils/mapErrorToStatus.ts`](src/utils/mapErrorToStatus.ts).
+
+---
+
+## 💬 Q&A Session Notes
+
+### Q: Is my `ProductController` implementation already correct?
+
+**A:** Yes—for Exercise 3 it matches `ProductService` errors, `mapErrorToStatus`, and the same `{ success, data, error }` pattern as `UserController`. Optional polish: use `parseInt(id, 10)` and mirror spacing in JSON payloads; behavior is already sound.
+
 ---
 
 ## ✅ Day 13 Checklist
 
-- [ ] Read Module 7 (Lines 2922-3200)
-- [ ] Understand what the Controller layer does
-- [ ] Understand HTTP status codes
-- [ ] Understand request data sources (params, body, query)
-- [ ] Understand error mapping
-- [ ] Type all code examples
-- [ ] Complete Exercise 1 (DELETE endpoint)
-- [ ] Complete Exercise 2 (Query parameters)
-- [ ] Complete Exercise 3 (ProductController)
-- [ ] Answer all quiz questions
-- [ ] Update Progress.md
+- [x] Read Module 7 (Lines 2922-3200)
+- [x] Understand what the Controller layer does
+- [x] Understand HTTP status codes
+- [x] Understand request data sources (params, body, query)
+- [x] Understand error mapping
+- [x] Type all code examples
+- [x] Complete Exercise 1 (DELETE endpoint)
+- [x] Complete Exercise 2 (Query parameters)
+- [x] Complete Exercise 3 (ProductController)
+- [x] Answer all quiz questions
+- [x] Update Progress.md
 
 ---
 

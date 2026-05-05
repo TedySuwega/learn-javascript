@@ -32,8 +32,8 @@
 |-----|-------|--------|------|-------|
 | 11 | Service Layer Basics | ✅ | Apr 9, 2026 | Quiz: 5/5 (100%) - service vs repo, validation, DTOs, DI, layering |
 | 12 | Service Layer - Security | ✅ | Apr 16, 2026 | Quiz: 4/5 (80%) — Q1/Q3 partial; Ex1–3 in `Exercises/day12/src` (real bcrypt in `passwordUtils.ts`) |
-| 13 | Controller Layer Basics | ⬜ | | |
-| 14 | Controller Layer Advanced | ⬜ | | |
+| 13 | Controller Layer Basics | ✅ | May 5, 2026 | Quiz: 5/5 (100%) — Q1–Q3 ✅, B1–B2 ✅; Ex1–3 in `Exercises/day13/src` |
+| 14 | Controller Layer Advanced | 🟡 | | |
 | 15 | Review & Mini Project | ⬜ | | |
 
 ### Week 4: Authentication & Complete Flow
@@ -115,7 +115,7 @@
 |-----|-------|-------|---------|
 | 11 | Service Layer Basics | 5/5 (100%) | Q1–Q3 ✅, B1–B2 ✅; Exercises 1–3 in `Exercises/day11/src` |
 | 12 | Service Layer - Security | 4/5 (80%) | Q1 ⚠️, Q2 ✅, Q3 ⚠️, B1 ✅, B2 ✅; `ForgotPasswordService`; real bcrypt (`passwordCrypto`) |
-| 13 | Controller Layer Basics | - | |
+| 13 | Controller Layer Basics | 5/5 (100%) | Q1–Q3 ✅, B1–B2 ✅; DELETE, query filters, ProductController (`mapErrorToStatus`) |
 | 14 | Controller Layer Advanced | - | |
 | 15 | Review & Mini Project | - | |
 
@@ -142,7 +142,7 @@
 |------|-------------|---------|
 | 1 | 24/26 (Day 1-5) | 92% |
 | 2 | 31.5/33 (Day 6-10) | 95% |
-| 3 | 9/10 (Day 11–12) | 90% |
+| 3 | 14/15 (Day 11–13) | 93% |
 | 4 | - | - |
 | 5 | - | - |
 
