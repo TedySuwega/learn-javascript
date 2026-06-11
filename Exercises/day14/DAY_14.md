@@ -727,19 +727,34 @@ Create a complete BookController with:
 What is the difference between PUT and PATCH?
 
 **Your Answer**: 
+- PUT is used to replace an entire resource. You must send the complete resource representation; any missing fields will typically be overwritten with null or default values. It is idempotent, meaning making the same request multiple times will always yield the same result.
 
+- PATCH is used for partial updates. You only send the specific fields you want to modify, leaving the rest of the resource untouched. It is generally non-idempotent, as repeating a relative instruction (e.g., "add 1 to age") alters the resource state each time.
+
+**✅ Correct!** You nailed the core distinction: PUT replaces the whole resource (all fields), PATCH updates only what you send. Your code mirrors this — `replaceUserSchema` requires every field; `patchUserSchema` allows partials with `minProperties: 1`. Small nuance: PATCH *can* be idempotent when you send absolute values (e.g. `{ "name": "Alice" }` twice); it’s only non-idempotent with relative ops like JSON Patch `"add"`.
 
 ### Q2: Pagination
 What information should a paginated response include?
 
 **Your Answer**: 
+- Data payload: The current slice of items.
+- Metadata:
+    - totalCount (total items across all pages)
+    - pageSize / limit (items per page)
+    - currentPage / cursor (current position)
+    - totalPages (total pages available)
 
+**✅ Correct!** Your field names map directly to what your API returns: `data` (the slice), `pagination.page`, `pagination.limit`, `pagination.total`, and `pagination.totalPages`. Clients need those four metadata fields to build “page X of Y” navigation.
 
 ### Q3: Status Code for Delete
 What status code should DELETE return on success and why?
 
 **Your Answer**: 
+- 204 No Content: The most common choice. Use this if the resource was successfully deleted and the server has no body/response payload to send back.
+- 200 OK: Use this if want to return a response body, such as a confirmation message or a copy of the deleted item.
+- 202 Accepted: Use this if the deletion task has been accepted but is being processed asynchronously (e.g., a background job running later).
 
+**✅ Correct!** **204 No Content** is the default for a successful DELETE with no body — exactly what your `userController.delete` and `bookController.delete` return. **200** is fine when you return a confirmation or the deleted record; **202** fits async/queued deletes.
 
 ---
 
@@ -748,29 +763,81 @@ What status code should DELETE return on success and why?
 ### B1: Why validate in both controller and service layer?
 
 **Your Answer**: 
+- Controller: Fails fast by validating basic input formats (HTTP level) to save server resources.
+- Service: Validates core business logic and data integrity, protecting the system regardless of whether the request came from an API, a cron job, or a CLI tool.
 
+**✅ Correct!** In your project this split is real: Fastify schemas in `schemas/userSchemas.ts` catch bad HTTP shape before the handler runs; `UserService.validateRegistration()` enforces business rules (duplicate email, password length) even if something bypasses HTTP.
 
 ### B2: How would you handle bulk operations (e.g., delete multiple users)?
 
 **Your Answer**: 
+- Small/Medium scale: Pass a list of IDs via query parameters (?ids=1,2,3) or in a POST request body.
+- Large scale: Process asynchronously by returning a 202 Accepted and offloading the work to a background queue.
+- Database efficiency: Execute a single batch query (e.g., WHERE id IN (...)) instead of looping individual deletes.
 
+**✅ Correct!** `DELETE /users?ids=1,2,3` or `POST /users/bulk-delete` with `{ "ids": [1,2,3] }` are the usual patterns; one `WHERE id IN (...)` in the repository beats N round-trips. **202** + background job is the right call when the list is huge.
+
+---
+
+## 📊 Quiz Results: Day 14
+
+| Question | Result | Notes |
+|----------|--------|-------|
+| Q1: PUT vs PATCH | ✅ Correct | Full replace vs partial; idempotent PUT; PATCH idempotency nuance noted |
+| Q2: Pagination metadata | ✅ Correct | Data slice + page, limit, total, totalPages |
+| Q3: DELETE status code | ✅ Correct | 204 default; 200/202 alternatives explained |
+| B1: Dual validation | ✅ Correct | Schema (HTTP) + service (business rules) |
+| B2: Bulk operations | ✅ Correct | Batch IDs, async 202, single SQL batch |
+
+**Score: 5/5 (100%)**
+
+### Exercise review (`Exercises/day14/src/`)
+
+Runnable code in [`Exercises/day14/`](./) (`package.json`, `tsconfig.json`, `src/`). Extends Day 13 patterns with full advanced controller layer.
+
+- **Lesson code:** [`controllers/userController.ts`](src/controllers/userController.ts) — full CRUD, pagination, search/filter, `login`; [`routes/userRoutes.ts`](src/routes/userRoutes.ts); [`index.ts`](src/index.ts) — inject-based CRUD + error tests.
+- **Exercise 1 (Sorting):** [`controllers/userController.ts`](src/controllers/userController.ts) — `buildFilters` + `sortBy`/`sortOrder`; [`repositories/userRepository.ts`](src/repositories/userRepository.ts) — `applySort`; [`utils/parseQuery.ts`](src/utils/parseQuery.ts) — shared parsers.
+- **Exercise 2 (Validation schemas):** [`schemas/userSchemas.ts`](src/schemas/userSchemas.ts) — create, replace (PUT), patch, list query, id params; wired in [`routes/userRoutes.ts`](src/routes/userRoutes.ts).
+- **Exercise 3 (BookController):** [`controllers/bookController.ts`](src/controllers/bookController.ts), [`services/bookService.ts`](src/services/bookService.ts), [`repositories/bookRepository.ts`](src/repositories/bookRepository.ts), [`routes/bookRoutes.ts`](src/routes/bookRoutes.ts), [`schemas/bookSchemas.ts`](src/schemas/bookSchemas.ts), [`types/book.ts`](src/types/book.ts).
+
+Implementation goes beyond the lesson snippet: filter/pagination/sort live in repository/service (not controller `.filter()`/`.slice()`), PUT requires all fields via schema, and shared [`utils/mapErrorToStatus.ts`](src/utils/mapErrorToStatus.ts) is reused from Day 13.
+
+---
+
+## 💬 Q&A Session Notes
+
+### Q: Please prepare the code needed for Day 14; reuse previous code where relevant.
+
+**A:** Day 14 project was bootstrapped in `Exercises/day14/src/` from Day 13 patterns — same Fastify setup, `UserService`/`userRepository`, plus new `updateUser`, pagination/sort in the repository, Fastify schemas, and a full Book stack for Exercise 3. Run with `npm install && npm run dev`.
+
+---
+
+### Q: What is still not done on Day 14 so I can continue learning?
+
+**A:** Code and exercises were already complete; remaining items were reading Module 7, typing/understanding the examples, quiz answers, and updating `PROGRESS.md`. Quiz and progress are now done via this review.
+
+---
+
+### Q: Is the Day 14 code correct and does it follow the instructions?
+
+**A:** Yes. All three exercises are implemented and tests pass. Main differences from the lesson text are improvements: layered filtering (repository vs controller), stricter PUT via `replaceUserSchema`, and schema + service validation instead of duplicate controller checks. Invalid IDs return Fastify schema 400 (different message shape) instead of the controller’s `"Invalid user ID format"` — still correct HTTP behavior.
 
 ---
 
 ## ✅ Day 14 Checklist
 
-- [ ] Read Module 7 (Lines 3201-3648)
-- [ ] Understand complete CRUD operations
-- [ ] Understand PUT vs PATCH
-- [ ] Understand pagination pattern
-- [ ] Understand search and filter patterns
-- [ ] Understand request validation
-- [ ] Type all code examples
-- [ ] Complete Exercise 1 (Sorting)
-- [ ] Complete Exercise 2 (Validation schema)
-- [ ] Complete Exercise 3 (BookController)
-- [ ] Answer all quiz questions
-- [ ] Update Progress.md
+- [x] Read Module 7 (Lines 3201-3648)
+- [x] Understand complete CRUD operations
+- [x] Understand PUT vs PATCH
+- [x] Understand pagination pattern
+- [x] Understand search and filter patterns
+- [x] Understand request validation
+- [x] Type all code examples
+- [x] Complete Exercise 1 (Sorting)
+- [x] Complete Exercise 2 (Validation schema)
+- [x] Complete Exercise 3 (BookController)
+- [x] Answer all quiz questions
+- [x] Update Progress.md
 
 ---
 
